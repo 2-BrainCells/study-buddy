@@ -55,6 +55,8 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
 - Write all code fresh during the hackathon (from 12 Oct). Earlier projects,
   such as my Agentic-KYC repo, are reference for ideas only; never copy
   their code.
+- The build plan, data model and daily done criteria are in docs/PLAN.md.
+Read it at the start of each build session.
 
 ## Commands
 - Run everything: docker compose up -d
