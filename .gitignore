@@ -1,0 +1,6 @@
+.env
+data/
+.claude/settings.local.json
+.claude/logs/
+__pycache__/
+node_modules/
