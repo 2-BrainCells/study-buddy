@@ -18,11 +18,14 @@ cost per experience, and who pays (ed-tech companies).
 ## Architecture
 
 1. Per-video pipeline (runs once per video, cached, shared by all learners)
-   - ffmpeg extracts audio
-   - faster-whisper on CPU: transcript with word timestamps
-   - split transcript into chunks; one MiMo-V2.6-Flash call per chunk returns
-     terms, the timestamp of the sentence end after each term, a base
-     explanation per term and 2 quiz questions per term (strict JSON schema)
+   - faster-whisper on CPU reads the video directly (PyAV, no ffmpeg step):
+     transcript with word timestamps, cached in data/cache
+   - split into sentence-aligned chunks (~600 words); one MiMo-V2.6-Flash call
+     per chunk returns terms, a base explanation and 2 quiz questions per term
+     (JSON mode + Pydantic); a reply that breaks the schema is retried once
+     (stage terms_repair)
+   - code finds each term in the word timestamps and pauses at the next
+     . ? or ! (the LLM never returns timestamps); quiz options are shuffled
    - BGE-M3 on CPU embeds each term; store in pgvector
 2. Per-learner loop
    - onboarding questionnaire (5 questions) seeds the learner profile
@@ -70,6 +73,19 @@ cost per experience, and who pays (ed-tech companies).
   Retry-After; max 8 concurrent, stay under ~20 requests/min
 - log requests, tokens, retries and latency per stage to stage_costs
 - `python -m pipeline check-endpoint` verifies key, models and one JSON call
+
+## Progress (14 Oct)
+
+- Wed foundation: done (commit 2926a19).
+- Thu per-video pipeline: done a day early (commit fa45a87), on the 16.3-min
+  lecture 2 clip: 26 terms, 52 quiz Qs, pause median 1.5 s / max 12.2 s.
+- Measured: Whisper small.en 388 s CPU per 16.3 min (~24 s per lecture
+  minute); LLM ~5.1k in / 6k out tokens per clip = ~$0.009 per lecture hour
+  at MiMo list price; 60-120 s per chunk call; 1 of 10 chunk calls failed
+  schema validation (repair retry added; not yet seen firing live).
+- Open: term quality (near-duplicates like gradient / gradient descent, junk
+  like "12th part"); parallel chunk calls before full 76-min lectures;
+  Docker image not rebuilt since CPU-only torch.
 
 ## Build order and done criteria
 

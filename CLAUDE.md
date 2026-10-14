@@ -6,9 +6,10 @@ explain terms the learner doesn't know yet, based on their notes.
 Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
 
 ## Architecture
-- Per-video pipeline (once per video): ffmpeg -> faster-whisper on CPU (word
-  timestamps) -> LLM finds terms and sentence ends -> explanations and quiz
-  questions -> Postgres cache.
+- Per-video pipeline (once per video): faster-whisper on CPU reads the video
+  directly (word timestamps) -> LLM finds terms per chunk -> code places each
+  pause at the end of the sentence that introduces the term -> explanations
+  and quiz questions -> Postgres cache.
 - Per-learner loop: questionnaire + notes -> learner profile -> novelty check
   (BGE-M3 + pgvector first, LLM only for borderline terms) -> player pauses at
   the sentence end.
@@ -28,7 +29,10 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
 - frontend/: React, Vite, TypeScript, Tailwind, shadcn/ui, Recharts. This
   project uses Vite, not my default Next.js: it's a static app served
   behind FastAPI.
-- docker-compose.yml: web, app, postgres. No GPU container.
+- docker-compose.yml: app, postgres (web container decided Friday). No GPU
+  container. Postgres is on host port 5433, because a Windows Postgres 17
+  service holds 5432. Local DATABASE_URL uses localhost:5433; the app
+  container uses postgres:5432.
 
 ## Models: AMD Token Factory (the hackathon's AMD requirement)
 - All LLM and vision calls go to the Token Factory OpenAI-compatible API.
@@ -43,8 +47,8 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   max_tokens and replies come back empty. GLM-5.3-Flash rejects "none"; use
   "low" there.
 - Limits: about 20 requests/min, 8 concurrent, a daily spend cap. Batch
-  work (one call per transcript chunk, not per term), retry only 429s with
-  exponential backoff and jitter, and cache every result.
+  work (one call per transcript chunk, not per term), retry only 429/502/503
+  with exponential backoff and jitter, and cache every result.
 - Log requests and token usage per pipeline stage to the stage_costs table.
 - Token Factory has no embeddings or audio endpoints; those run on CPU.
 - Send only lecture content and study notes; prompts are logged ~2 days.
@@ -67,4 +71,4 @@ Read it at the start of each build session.
 - Lint: python -m ruff check backend
 - Frontend dev server: npm run dev (from frontend/)
 - Check the model endpoint: python -m pipeline check-endpoint
-- Process a video: python -m pipeline process <video-path>
+- Process a video (from backend/): python -m pipeline process <video-path> --title "<title>"
