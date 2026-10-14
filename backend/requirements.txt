@@ -6,3 +6,5 @@ pydantic
 python-dotenv
 httpx
 pytest
+faster-whisper
+sentence-transformers

@@ -14,7 +14,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres # for local dev
       POSTGRES_DB: studybuddy
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]  # host 5432 is taken by a Windows Postgres 17 service
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/db:/docker-entrypoint-initdb.d:ro
