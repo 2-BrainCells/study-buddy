@@ -35,10 +35,13 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   Read RADEON_API_KEY, LLM_BASE_URL, LLM_MODEL and VISION_MODEL from env
   vars; never hard-code them. Check GET /v1/models at startup, because
   model names change.
-- LLM_MODEL is MiMo-V2.6-Flash (supports strict json_schema). Every call
-  that returns data uses a JSON schema and is validated with Pydantic.
+- LLM_MODEL is MiMo-V2.6-Flash. Token Factory supports JSON mode
+  (response_format json_object) but not json_schema (structured_outputs:
+  false, checked 14 Oct). Put the schema in the system prompt and validate
+  every reply with Pydantic.
 - Always send reasoning_effort "none" or "low"; thinking otherwise uses up
-  max_tokens and replies come back empty.
+  max_tokens and replies come back empty. GLM-5.3-Flash rejects "none"; use
+  "low" there.
 - Limits: about 20 requests/min, 8 concurrent, a daily spend cap. Batch
   work (one call per transcript chunk, not per term), retry only 429s with
   exponential backoff and jitter, and cache every result.

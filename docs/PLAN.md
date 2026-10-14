@@ -64,8 +64,8 @@ cost per experience, and who pays (ed-tech companies).
 
 - base URL, key and model names from env (LLM_BASE_URL, RADEON_API_KEY,
   LLM_MODEL, VISION_MODEL); check GET /v1/models at startup
-- every data call: response_format json_schema (MiMo-V2.6-Flash) + Pydantic
-  validation; reasoning_effort "none"
+- every data call: response_format json_object + schema in the system prompt
+  + Pydantic validation (no json_schema on Token Factory); reasoning_effort "none"
 - retry only 429/502/503 with exponential backoff + jitter, honour
   Retry-After; max 8 concurrent, stay under ~20 requests/min
 - log requests, tokens, retries and latency per stage to stage_costs
