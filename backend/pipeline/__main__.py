@@ -1,6 +1,7 @@
 """CLI: python -m pipeline <command>  (run from backend/)."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -90,6 +91,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check-endpoint", help="verify key, models and one JSON call")
+    sub.add_parser("check-usage", help="show what quota data Token Factory reports (no tokens used)")
     p = sub.add_parser("process", help="run the per-video pipeline on one video")
     p.add_argument("video", type=Path)
     p.add_argument("--title", required=True)
@@ -102,6 +104,22 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "eval-novelty":
         eval_novelty(args.learner, args.video, args.labels)
+    if args.command == "check-usage":
+        from pipeline.llm import rate_limits
+
+        q = rate_limits(Settings.from_env())
+        print("available:", q["available"])
+        if q["available"]:
+            print("x-ratelimit headers:", q["limits"] or "none")
+            u = q["usage"] if isinstance(q["usage"], dict) else {}
+            print("GET /usage keys:", sorted(u))
+            for k in ("daily_cost_limit_usd", "daily_cost_used_usd", "daily_cost_remaining_usd", "daily_reset_at",
+                      "rpm_limit", "window_hours"):
+                print(f"  {k} = {u.get(k)}")
+            for k in ("today", "last_24_hours", "by_model", "by_source"):  # shapes only; ids are not printed
+                print(f"  {k}: {json.dumps(u.get(k))[:400]}")
+        else:
+            print("reason:", q["reason"])
     if args.command == "check-endpoint":
         sys.exit(check_endpoint())
     if args.command == "process":

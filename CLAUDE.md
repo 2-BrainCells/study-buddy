@@ -21,8 +21,10 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   review -> indexer.
 - Ed-tech dashboard: where learners struggle (pauses, wrong quiz answers),
   plus an AMD usage panel: requests, tokens and latency per pipeline stage,
-  tokens per lecture hour and per learner, and remaining daily quota and
-  429s from the X-RateLimit headers and GET /v1/usage. Every usage collector
+  tokens per lecture hour and per learner (from stage_costs), and the daily
+  budget from GET /v1/usage (checked 16 Oct: $1/day cost cap, 20 requests/min,
+  Token Factory's own billed cost; there are no X-RateLimit headers on
+  /models). 429s come from stage_costs.retries_429. Every usage collector
   returns safe defaults on failure, so the panel never crashes.
 
 ## Stack
@@ -30,7 +32,8 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   faster-whisper on CPU. Local development uses the conda env "study-buddy";
   install packages there and don't create other environments. The app
   container has its own Python and installs from backend/requirements.txt.
-- frontend/: React, Vite, TypeScript, Tailwind, shadcn/ui (Radix), Recharts.
+- frontend/: React, Vite, TypeScript, Tailwind, shadcn/ui (Radix). No chart
+  library: the timelines and bars are plain CSS (Recharts was tried and removed).
   This project uses Vite, not my default Next.js: it's a static app served
   behind FastAPI. All API routes are under /api; in dev, Vite proxies /api
   to localhost:8001. Design rules live in design/BRIEF.md (hybrid theme:
@@ -85,4 +88,5 @@ Read it at the start of each build session.
 - Frontend tests: npm test (from frontend/)
 - Novelty eval (from backend/): python -m pipeline eval-novelty --learner <id> --video <id> --labels ../data/notes/labels_a.csv
 - Check the model endpoint: python -m pipeline check-endpoint
+- Check what quota Token Factory reports (no tokens used): python -m pipeline check-usage
 - Process a video (from backend/): python -m pipeline process <video-path> --title "<title>"

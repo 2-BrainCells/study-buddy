@@ -102,3 +102,17 @@ repo; small samples are marked as such.
 | 50 | Hindrance | The Chrome extension disconnected or lost its tab group | Long scripts (over 10 s) and a hidden window | Reconnected with `/chrome`; shorter scripts and fresh tabs | Workaround |
 | 51 | Decision | Walkthroughs for new build steps unless asked to "do it" | The developer's learning goal | Followed; "do it" / "fix it" switched to building | Ongoing |
 | 52 | Decision | Never commit `data/` or `.env`; commits only through `/checkpoint`; every push confirmed | Project rules | Files staged explicitly, with a check before every commit | Ongoing |
+
+## 9. Dashboard and AMD usage panel (16 Oct)
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 53 | Hindrance | The planned quota sources were unverified (`X-RateLimit` headers, `GET /v1/usage`) | They had been written into the plan before anyone checked | `python -m pipeline check-usage` probed them: no `x-ratelimit` headers on `/models`, but `GET /usage` reports a $1/day cost cap, 20 requests/min and Token Factory's own billed cost. Docs corrected | This commit |
+| 54 | Decision | Costs shown at list price, next to Token Factory's own billed figure | The bill is lower because prompt-cache hits are cheaper (a 37% hit rate in the last 24 h) | The panel states both, and labels which is which | This commit |
+| 55 | Decision | The quota collector keeps only the panel's fields | `GET /usage` also returns organisation and project ids and a list of recent requests | `quota_summary()` whitelists fields; a test checks that ids are dropped | This commit |
+| 56 | Decision | The dashboard shows real events only; no seeded or fake data | Fabricated data would mislead the buyer | An empty state until real sessions (friend test, demo run-throughs) exist | This commit |
+| 57 | Decision | "Struggle" score = learners who paused + wrong quiz answers | Needed a simple ranking; nothing validated exists | Labelled on screen as pauses + wrong quiz answers; documented as a heuristic | This commit |
+| 58 | Error | The token chart and budget bar used teal, the colour that means "already known" | Status colours were reused for an unrelated measure | Neutral ink for magnitudes, amber only where it means pauses | This commit |
+| 59 | Error | The first dashboard failed the design critic (originality 5, craft 6, functionality 5) | The AMD numbers were below the fold (y=1176), a single-bar chart on a 0–4 axis, a 20-row table of zeros, "25 requests" included CPU runs, and raw stage ids | An "at a glance" row with both halves above the fold, a lecture strip in the player's timeline style, only terms with activity shown, only Token Factory requests counted, readable stage names | This commit |
+| 60 | Decision | Recharts removed again | Both charts were replaced by a CSS strip and inline bars, which read better with this little data | `npm uninstall recharts`; one dependency fewer | This commit |
+| 61 | Error | The phone dashboard overflowed by 14 px although my check said it didn't | I compared `scrollWidth` with `innerWidth`, which includes the 15 px scrollbar; the real cause was a grid with no column template below `lg` (the same mistake as #49) | `grid-cols-1` on the grid; checks now compare `scrollWidth` with `documentElement.clientWidth`, on every screen | This commit |

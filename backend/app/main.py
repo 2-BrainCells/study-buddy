@@ -10,6 +10,7 @@ from pipeline.llm import Settings, TokenFactory, db_cost_sink
 from pipeline.transcribe import to_vtt
 from pydantic import BaseModel
 
+from app import insights
 from app.learner import (
     SEED_TERMS,
     Questionnaire,
@@ -213,6 +214,20 @@ def quiz(video_id: int) -> list[dict]:
     return [
         dict(zip(("id", "term_id", "question", "options", "answer"), r)) for r in rows
     ]
+
+
+@api.get("/usage")
+def get_usage() -> dict:
+    """AMD usage panel: requests, tokens, latency and cost per stage, per lecture hour and per learner, plus quota."""
+    with psycopg.connect(DATABASE_URL) as conn:
+        return insights.usage(conn, insights.cached_quota())
+
+
+@api.get("/dashboard/videos/{video_id}")
+def get_dashboard(video_id: int) -> dict:
+    """Ed-tech dashboard: where learners struggle in one video."""
+    with psycopg.connect(DATABASE_URL) as conn:
+        return insights.dashboard(conn, video_id)
 
 
 app.include_router(api)  # last: it copies the routes that exist at this point

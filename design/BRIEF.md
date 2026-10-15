@@ -23,6 +23,7 @@ personalisation: whose lecture this is, where it will pause, and what it skips.
   - grey: terms saved for the end
   - teal (`#1F7A68` on light, `#5EC2B0` on dark): terms skipped because the learner already knows them
 - **Fonts:** Inter for the UI; Newsreader for headwords, explanations and headings.
+- **Magnitudes use neutral ink**, with one exception: the dashboard's lecture strip uses amber for learner activity, because amber already means "paused" everywhere else in the product.
 - **History:** the first version (Direction B, all dark and very sparse) passed the design critic. You found it too dark and too minimal, so the light page and the added content replaced it.
 
 ## References

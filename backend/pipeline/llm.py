@@ -59,16 +59,68 @@ class StageCost:
 
 
 class EmptyReplyError(RuntimeError):
-    """The model returned no content (ux_tokens)."""
+    """The model returned no content (usually reasoning used up max_tokens)."""
 
 
 def _backoff(attempt: int, retry_after: str | None) -> float:
-    """Seconds to wait before the next se 2**attempt, plus jitter."""
+    """Seconds to wait before the next try: Retry-After if given, else 2**attempt, plus jitter."""
     try:
         base = float(retry_after) if retry_after else 2.0**attempt
     except ValueError:  # Retry-After may also be an HTTP date
         base = 2.0**attempt
     return base + random.uniform(0, 1)
+
+
+RATE_HEADER_PREFIX = "x-ratelimit-"
+
+
+def rate_limits(settings: Settings, http_client: httpx.Client | None = None) -> dict:
+    """Quota as Token Factory reports it: x-ratelimit-* headers on GET /models, plus GET /usage.
+
+    Never raises: any failure returns {"available": False, "reason": ...}, so the usage panel can't crash.
+    """
+    client = http_client or httpx.Client(timeout=10)
+    auth = {"Authorization": f"Bearer {settings.api_key}"}
+    base = settings.base_url.rstrip("/")
+    try:
+        models = client.get(f"{base}/models", headers=auth)  # free: no tokens
+        limits = {k.lower(): v for k, v in models.headers.items() if k.lower().startswith(RATE_HEADER_PREFIX)}
+        resp = client.get(f"{base}/usage", headers=auth)
+        usage = resp.json() if resp.status_code == 200 else None
+    except Exception as e:  # noqa: BLE001  collector boundary: report any failure as a safe default
+        return {"available": False, "reason": f"{type(e).__name__}: {e}"[:200]}
+    if not limits and usage is None:
+        return {
+            "available": False,
+            "reason": f"Token Factory sent no x-ratelimit headers and GET /usage returned {resp.status_code}",
+        }
+    return {"available": True, "limits": limits, "usage": usage}
+
+
+USAGE_TOTAL_KEYS = ("requests", "errors", "total_tokens", "prompt_tokens", "completion_tokens", "cached_tokens", "cost")
+
+
+def quota_summary(q: dict) -> dict:
+    """The parts of a rate_limits() result the usage panel shows; no org/project ids or recent requests."""
+    if not q.get("available"):
+        return q
+    u = q.get("usage") or {}
+
+    def totals(key: str) -> dict:
+        part = u.get(key) or {}
+        return {k: part.get(k) for k in USAGE_TOTAL_KEYS}
+
+    return {
+        "available": True,
+        "daily_limit_usd": u.get("daily_cost_limit_usd"),
+        "daily_used_usd": u.get("daily_cost_used_usd"),
+        "daily_remaining_usd": u.get("daily_cost_remaining_usd"),
+        "reset_at": u.get("daily_reset_at"),
+        "rpm_limit": u.get("rpm_limit"),
+        "today": totals("today"),
+        "last_24_hours": totals("last_24_hours"),
+        "rate_headers": q.get("limits") or {},
+    }
 
 
 def db_cost_sink(database_url: str) -> Callable[[StageCost], None]:
@@ -85,7 +137,7 @@ def db_cost_sink(database_url: str) -> Callable[[StageCost], None]:
 
 
 class TokenFactory:
-    """Rate-limited, retrying, cost-logctory API."""
+    """Rate-limited, retrying, cost-logging client for the Token Factory API."""
 
     def __init__(
         self,

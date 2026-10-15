@@ -48,8 +48,9 @@ cost per experience, and who pays (ed-tech companies).
    - per lecture: terms most learners found new or got wrong, pause counts
    - AMD usage panel: requests, input/output tokens, latency per pipeline
      stage; tokens per lecture hour and per learner; remaining daily quota
-     and 429 count (X-RateLimit headers, GET /v1/usage). Every collector
-     returns safe defaults on failure.
+     from GET /v1/usage ($1/day cap, 20 rpm; no X-RateLimit headers on
+     /models) and the 429 count from stage_costs. Every collector returns
+     safe defaults on failure. Built 16 Oct as the Dashboard screen.
 
 ## Suggested data model (Postgres + pgvector)
 
