@@ -9,6 +9,7 @@ from pipeline.terms import (
     QuizOut,
     TermOut,
     chunk,
+    drop_nested,
     extract_terms,
     place,
     shuffle_options,
@@ -95,7 +96,12 @@ def test_valid_reply_makes_one_call():
     tf = FakeTF(ChunkOut(terms=[term("cost function")]))
     extract_terms(tf, [W], video_id=1)
     assert [stage for stage, _ in tf.calls] == ["terms"]
+    
 
+def test_drop_nested_keeps_the_longer_term_at_the_same_pause():
+    placed = [(term("gradient"), (1.0, 2.0)), (term("gradient descent"), (1.0, 2.0)), (term("descent"), (5.0, 6.0))]
+    assert [t.term for t, _ in drop_nested(placed)] == ["gradient descent", "descent"]
+    
 
 @pytest.mark.parametrize("seed", range(5))
 def test_shuffle_keeps_the_right_answer(seed):

@@ -37,6 +37,54 @@ def check_endpoint() -> int:
     return 0
 
 
+def eval_novelty(learner_id: int, video_id: int, labels: Path) -> None:
+    """Compare the novelty check's "known" against hand labels (CSV: term,in_notes with 1/0)."""
+    import csv
+    import os
+
+    import psycopg
+    from app.learner import video_plan
+
+    from pipeline.llm import db_cost_sink
+
+    raw = labels.read_bytes()
+    # PowerShell 5.1's `>` writes UTF-16 with a BOM; editors usually write UTF-8
+    text = raw.decode(
+        "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+    )
+    truth = {
+        r["term"].strip().lower(): r["in_notes"].strip()
+        for r in csv.DictReader(text.splitlines())
+    }
+    tf = TokenFactory(Settings.from_env(), db_cost_sink(os.environ["DATABASE_URL"]))
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        plan = video_plan(conn, tf, learner_id, video_id)
+
+    tp = fp = fn = tn = skipped = 0
+    for p in plan:
+        label = truth.get(p["term"].lower(), "")
+        print(
+            f"{p['term'][:30]:30} sim={p['sim']!s:6} {p['status']:10} label={label or '-':2} ({p['reason']})"
+        )
+        if label not in ("0", "1"):
+            skipped += 1
+            continue
+        known, actual = p["status"] == "known", label == "1"
+        tp += known and actual
+        fp += known and not actual
+        fn += not known and actual
+        tn += not known and not actual
+    print(
+        f"\nTP {tp}  FP {fp}  FN {fn}  TN {tn}  unlabelled {skipped}"
+    )
+    print(
+        f"known: precision {tp / max(tp + fp, 1):.2f}, recall {tp / max(tp + fn, 1):.2f}"
+    )
+    print(
+        "caveat: n is one learner on one clip; cached verdicts are reused, so delete source='video' rows to re-judge."
+    )
+
+
 def main() -> None:
     load_dotenv()  # finds ../.env locally; does nothing in Docker, where env_file already set the vars
     parser = argparse.ArgumentParser(prog="pipeline")
@@ -45,7 +93,15 @@ def main() -> None:
     p = sub.add_parser("process", help="run the per-video pipeline on one video")
     p.add_argument("video", type=Path)
     p.add_argument("--title", required=True)
+    e = sub.add_parser(
+        "eval-novelty", help="compare novelty statuses against hand labels"
+    )
+    e.add_argument("--learner", type=int, required=True)
+    e.add_argument("--video", type=int, required=True)
+    e.add_argument("--labels", type=Path, required=True)
     args = parser.parse_args()
+    if args.command == "eval-novelty":
+        eval_novelty(args.learner, args.video, args.labels)
     if args.command == "check-endpoint":
         sys.exit(check_endpoint())
     if args.command == "process":

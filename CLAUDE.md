@@ -11,8 +11,9 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   pause at the end of the sentence that introduces the term -> explanations
   and quiz questions -> Postgres cache.
 - Per-learner loop: questionnaire + notes -> learner profile -> novelty check
-  (BGE-M3 + pgvector first, LLM only for borderline terms) -> player pauses at
-  the sentence end.
+  (profile match first, then one LLM call per learner per video judges which
+  remaining terms the notes cover; BGE-M3 finds the nearest known term for
+  the card) -> player pauses at the sentence end.
 - Handwritten notes: photo -> vision model or OCR -> Markdown -> learner
   review -> indexer.
 - Ed-tech dashboard: where learners struggle (pauses, wrong quiz answers),

@@ -83,6 +83,8 @@ From the transcript excerpt below, pick up to 8 technical terms a newcomer may n
 Copy each term EXACTLY as it appears in the excerpt.
 For each term: a 2-3 sentence plain-English explanation, and 2 multiple-choice questions
 with 4 options each; "answer" is the index (0-3) of the correct option.
+Pick specific technical terms only (like "gradient descent"), not everyday words (like "questions" or "part").
+Do not list a term that is part of a longer term you already listed.
 
 Excerpt:
 """
@@ -132,3 +134,16 @@ def shuffle_options(q: QuizOut, rng: random.Random) -> tuple[list[str], int]:
     order = list(range(len(q.options)))
     rng.shuffle(order)
     return [q.options[i] for i in order], order.index(q.answer)
+
+def drop_nested(
+    placed: list[tuple[TermOut, tuple[float, float]]],
+) -> list[tuple[TermOut, tuple[float, float]]]:
+    """Drop a term that is part of a longer term pausing at the same moment ("gradient" in "gradient descent")."""
+    return [
+        (t, p)
+        for t, p in placed
+        if not any(
+            o is not t and op[1] == p[1] and t.term.lower() in o.term.lower() and len(o.term) > len(t.term)
+            for o, op in placed
+        )
+    ]

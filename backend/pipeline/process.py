@@ -8,13 +8,12 @@ from pathlib import Path
 
 import psycopg
 from psycopg.types.json import Jsonb
-from sentence_transformers import SentenceTransformer
 
+from pipeline.embed import EMBED_MODEL, embed, to_vector
 from pipeline.llm import Settings, StageCost, TokenFactory, db_cost_sink
-from pipeline.terms import chunk, extract_terms, place, shuffle_options
+from pipeline.terms import chunk, drop_nested, extract_terms, place, shuffle_options
 from pipeline.transcribe import WHISPER_MODEL, transcribe
 
-EMBED_MODEL = "BAAI/bge-m3"
 SOURCE = "Stanford Engineering Everywhere, CS229 (Andrew Ng)"
 LICENCE = "CC BY-NC-SA 4.0"
 
@@ -22,10 +21,6 @@ LICENCE = "CC BY-NC-SA 4.0"
 def _ms(t0: float) -> int:
     return int((time.monotonic() - t0) * 1000)
 
-
-def to_vector(v) -> str:
-    """pgvector text format: '[0.1,0.2,...]' (avoids adding the pgvector package)."""
-    return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
 
 def process(video: Path, title: str) -> None:
@@ -61,12 +56,10 @@ def process(video: Path, title: str) -> None:
     )  # 8 terms x 2 quiz Qs needs >2000
     terms, failed = extract_terms(tf, chunks, video_id)
     placed = [(t, place(t.term, words)) for t in terms]
-    kept = [(t, p) for t, p in placed if p]
+    kept = drop_nested([(t, p) for t, p in placed if p])
 
     t0 = time.monotonic()
-    vectors = SentenceTransformer(EMBED_MODEL, device="cpu").encode(
-        [t.term for t, _ in kept], normalize_embeddings=True
-    )
+    vectors = embed([t.term for t, _ in kept])
     sink(
         StageCost(
             stage="embed",

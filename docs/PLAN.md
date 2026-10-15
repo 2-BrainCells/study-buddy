@@ -31,9 +31,11 @@ cost per experience, and who pays (ed-tech companies).
    - onboarding questionnaire (5 questions) seeds the learner profile
    - notes (typed Markdown/PDF now; handwriting photos as stretch) are
      indexed: terms extracted, embedded with BGE-M3, added to the profile
-   - novelty check per video term: pgvector similarity + simple rules first
-     (known / new / rare); only borderline terms go to the LLM, which also
-     writes a one-line link to the learner's own notes
+   - novelty check per video term: exact profile match first; then one LLM
+     call per learner per video judges which remaining terms the notes cover
+     (known / new, with a short quote from the notes as evidence); verdicts
+     cached in learner_terms (source video); BGE-M3 + pgvector find the
+     nearest known term for the card
    - player (HTML5 video) loads the video cache + this learner's decisions
      once, then pauses locally at the sentence end for "new" terms
      (study mode) or shows a small card without pausing (glance mode);
@@ -86,6 +88,23 @@ cost per experience, and who pays (ed-tech companies).
 - Open: term quality (near-duplicates like gradient / gradient descent, junk
   like "12th part"); parallel chunk calls before full 76-min lectures;
   Docker image not rebuilt since CPU-only torch.
+
+## Progress (15 Oct)
+
+- Learner side backend: questionnaire seeding, typed notes indexing, plan
+  endpoint, eval-novelty command. Learner A (notes) vs B (none) on the clip:
+  different plans, so Friday's done criterion is met on the backend.
+- Novelty eval, learner A, 22 hand-labelled terms (n is small, one learner,
+  one clip): similarity bands (0.60/0.80) gave precision 0.80 / recall 0.36
+  for "known"; BGE-M3 scores 0.52-0.73 for everything (AUC ~0.61), so bands
+  were dropped. LLM coverage check, prompt frozen, 3 runs: precision
+  0.50-0.55 / recall 0.55. Not a clear win: it trades missed pauses for
+  extra ones. Many disagreements are label-definition ambiguity ("studied
+  the idea" vs "would want a card"); fix the label question before
+  labelling a second clip, don't tune the prompt on these 22 terms.
+- Novelty call: 1.7k in / ~450 out tokens (~$0.0004 per learner per video)
+  but 100-210 s latency, so it can't run on the player's first GET /plan;
+  precompute it after notes are indexed.
 
 ## Build order and done criteria
 
