@@ -4,12 +4,17 @@ export const MAX_PAUSES = 5 // ponytail: fixed cap per video; scale with duratio
 
 export type Stop = { ts: number; items: PlanItem[] }
 
-/** This learner's new terms grouped by pause point; the first `cap` stops pause, the rest wait for the end. */
+/**
+ * This learner's new terms grouped by pause point. The `cap` stops whose terms the lecture mentions most
+ * pause (ties go to the earlier stop); the rest wait for the end. Both lists are in video order.
+ */
 export function buildStops(plan: PlanItem[], cap = MAX_PAUSES): { stops: Stop[]; queued: PlanItem[] } {
   const byTs = new Map<number, PlanItem[]>()
   for (const p of plan) if (p.status === "new") byTs.set(p.pause_ts, [...(byTs.get(p.pause_ts) ?? []), p])
   const all = [...byTs].sort((a, b) => a[0] - b[0]).map(([ts, items]) => ({ ts, items }))
-  return { stops: all.slice(0, cap), queued: all.slice(cap).flatMap((s) => s.items) }
+  const weight = (s: Stop) => Math.max(...s.items.map((i) => i.mentions))
+  const chosen = new Set([...all].sort((a, b) => weight(b) - weight(a) || a.ts - b.ts).slice(0, cap))
+  return { stops: all.filter((s) => chosen.has(s)), queued: all.filter((s) => !chosen.has(s)).flatMap((s) => s.items) }
 }
 
 /**

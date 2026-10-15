@@ -9,6 +9,7 @@ from pipeline.terms import (
     QuizOut,
     TermOut,
     chunk,
+    drop_near_duplicates,
     drop_nested,
     extract_terms,
     place,
@@ -108,3 +109,10 @@ def test_shuffle_keeps_the_right_answer(seed):
     q = QuizOut(question="q", options=["right", "w1", "w2", "w3"], answer=0)
     options, answer = shuffle_options(q, random.Random(seed))
     assert options[answer] == "right" and sorted(options) == sorted(q.options)
+
+
+def test_drop_near_duplicates_keeps_the_earliest_wording():
+    kept = [(term("local optima"), (281.0, 282.0)), (term("local optimum"), (257.0, 258.0)), (term("contours"), (813.0, 814.0))]
+    vectors = [[1.0, 0.0], [0.95, 0.312], [0.0, 1.0]]  # optima/optimum cosine 0.95, contours orthogonal
+    out, vecs = drop_near_duplicates(kept, vectors, threshold=0.9)
+    assert [t.term for t, _ in out] == ["local optimum", "contours"] and len(vecs) == 2

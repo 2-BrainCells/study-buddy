@@ -7,6 +7,7 @@ export type PlanItem = {
   reason: string
   nearest: string | null
   sim: number | null
+  mentions: number // how often the transcript says the term; ranks which stops pause
 }
 export type Question = { id: number; term_id: number; question: string; options: string[]; answer: number }
 export type Video = { id: number; title: string; source: string; licence: string; duration_s: number }

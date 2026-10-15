@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pipeline.llm import EmptyReplyError, TokenFactory
 from pipeline.transcribe import Word
 
+NEAR_DUP = 0.90  # BGE-M3 cosine; on the lecture 2 clip only true duplicates scored above it
 CHUNK_WORDS = 600  # ~4 min of speech, ~1k input tokens
 SENTENCE_END = (".", "?", "!")
 
@@ -147,3 +148,22 @@ def drop_nested(
             for o, op in placed
         )
     ]
+
+
+def drop_near_duplicates(
+    kept: list[tuple[TermOut, tuple[float, float]]],
+    vectors: list[list[float]],
+    threshold: float = NEAR_DUP,
+) -> tuple[list[tuple[TermOut, tuple[float, float]]], list[list[float]]]:
+    """Drop a term whose (normalised) embedding is within `threshold` cosine of one introduced earlier.
+
+    "local optima" after "local optimum": the earliest wording wins, since that is where the idea is introduced.
+    """
+    # ponytail: O(n^2) dot products in pure Python; fine for ~30 terms per clip, use numpy if lectures yield hundreds
+    order = sorted(range(len(kept)), key=lambda i: kept[i][1][0])
+    keep: list[int] = []
+    for i in order:
+        if all(sum(a * b for a, b in zip(vectors[i], vectors[j])) < threshold for j in keep):
+            keep.append(i)
+    keep.sort()
+    return [kept[i] for i in keep], [vectors[i] for i in keep]

@@ -166,9 +166,16 @@ def index_notes(conn, tf: TokenFactory, learner_id: int, text: str) -> int:
     return add_known_terms(conn, learner_id, terms, "notes")
 
 
+# mentions: how often the transcript says the term, a rough importance signal for choosing which stops pause
+# ponytail: plain substring count; "parameters" also counts inside "parameters theta". Fine for ranking.
 PLAN_SQL = """
-SELECT t.id, t.term, t.pause_ts, t.explanation, nn.term_text, nn.sim
+WITH tx AS (
+    SELECT lower(coalesce(string_agg(text, ' ' ORDER BY start_s), '')) AS t FROM segments WHERE video_id = %(vid)s
+)
+SELECT t.id, t.term, t.pause_ts, t.explanation, nn.term_text, nn.sim,
+       (length(tx.t) - length(replace(tx.t, lower(t.term), ''))) / greatest(length(t.term), 1) AS mentions
 FROM terms t
+CROSS JOIN tx
 LEFT JOIN LATERAL (
     SELECT lt.term_text, 1 - (lt.embedding <=> t.embedding) AS sim
     FROM learner_terms lt
@@ -211,7 +218,7 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
             conn.execute(SAVE_VERDICT, (learner_id, status, source, tid))
 
     plan = []
-    for term_id, term, pause_ts, explanation, nearest, sim in rows:
+    for term_id, term, pause_ts, explanation, nearest, sim, mentions in rows:
         status, reason = classify(term, profile, verdicts)
         plan.append(
             {
@@ -223,6 +230,7 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
                 "reason": reason,
                 "nearest": nearest,
                 "sim": round(sim, 3) if sim is not None else None,
+                "mentions": mentions,
             }
         )
     return plan

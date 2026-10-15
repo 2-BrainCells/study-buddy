@@ -11,7 +11,14 @@ from psycopg.types.json import Jsonb
 
 from pipeline.embed import EMBED_MODEL, embed, to_vector
 from pipeline.llm import Settings, StageCost, TokenFactory, db_cost_sink
-from pipeline.terms import chunk, drop_nested, extract_terms, place, shuffle_options
+from pipeline.terms import (
+    chunk,
+    drop_near_duplicates,
+    drop_nested,
+    extract_terms,
+    place,
+    shuffle_options,
+)
 from pipeline.transcribe import WHISPER_MODEL, transcribe
 
 SOURCE = "Stanford Engineering Everywhere, CS229 (Andrew Ng)"
@@ -60,6 +67,8 @@ def process(video: Path, title: str) -> None:
 
     t0 = time.monotonic()
     vectors = embed([t.term for t, _ in kept])
+    placed_count = len(kept)
+    kept, vectors = drop_near_duplicates(kept, vectors)
     sink(
         StageCost(
             stage="embed",
@@ -105,7 +114,7 @@ def process(video: Path, title: str) -> None:
     )
     print(
         f"terms: {len(terms)} found, {len(kept)} placed, {len(terms) - len(kept)} not found in transcript; "
-        f"{2 * len(kept)} quiz questions"
+        f"{placed_count - len(kept)} near-duplicates dropped; {2 * len(kept)} quiz questions"
     )
     print(
         f"pause delay after first mention: median {statistics.median(delays):.1f}s, max {max(delays):.1f}s"
