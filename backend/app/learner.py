@@ -112,7 +112,12 @@ def classify(
     """Return (status, reason): the learner's profile first, then the notes-coverage verdict."""
     key = term.lower()
     if key in profile:
-        return ("known" if profile[key] == "known" else "new"), "in profile"
+        # profile rows marked new only come from cached notes verdicts, so say that rather than "in profile"
+        return (
+            ("known", "in profile")
+            if profile[key] == "known"
+            else ("new", "not in notes")
+        )
     v = verdicts.get(key)
     if v is None:
         return (

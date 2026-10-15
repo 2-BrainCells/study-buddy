@@ -24,7 +24,14 @@ def verdict(term: str, covered: bool) -> Verdict:
 
 def test_profile_wins_over_verdict():
     v = {"gradient descent": verdict("gradient descent", True)}
-    assert classify("Gradient Descent", {"gradient descent": "new"}, v)[0] == "new"
+    assert classify("Gradient Descent", {"gradient descent": "new"}, v) == (
+        "new",
+        "not in notes",
+    )
+    assert classify("Gradient Descent", {"gradient descent": "known"}, {}) == (
+        "known",
+        "in profile",
+    )
 
 
 def test_verdict_decides_terms_not_in_profile():

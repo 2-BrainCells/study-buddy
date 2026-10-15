@@ -64,9 +64,13 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
         {video && (
           <>
             <p className="text-sm text-muted-foreground">{video.title}</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {learners.map((l) => (
-                <Button key={l.id} onClick={() => onStart(l, video)}>{l.name}</Button>
+                <button key={l.id} type="button" onClick={() => onStart(l, video)}
+                        className="min-w-36 rounded-lg border bg-card px-4 py-3 text-left transition-colors duration-150 ease-calm hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2">
+                  <span className="block text-sm font-medium">{l.name}</span>
+                  <span className="block text-xs text-muted-foreground">Watch as this learner</span>
+                </button>
               ))}
             </div>
           </>
@@ -97,7 +101,7 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
               <Label htmlFor="notes">Your notes (Markdown, optional)</Label>
               <Textarea id="notes" rows={8} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
-            <Button type="submit" disabled={busy}>{busy ? "Working…" : "Create learner"}</Button>
+            <Button type="submit" variant="secondary" disabled={busy}>{busy ? "Working…" : "Create learner"}</Button>
           </form>
         </CardContent>
       </Card>

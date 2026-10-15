@@ -21,6 +21,16 @@ export function crossed(stops: Stop[], fired: Set<number>, prev: number, now: nu
   return stops.find((s) => !fired.has(s.ts) && prev < s.ts && s.ts <= now)
 }
 
+/** "m:ss" for a time in seconds. */
+export const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`
+
+/** The learner-facing "why it paused" line for a new term's reason from the plan API. */
+export function whyText(reason: string): string {
+  if (reason === "not in notes") return "Not covered in your notes"
+  if (reason === "not checked against notes") return "No notes cover it yet"
+  return reason // ponytail: unknown reasons shown as-is, so a new backend reason is visible rather than hidden
+}
+
 /** n questions, one per term: this learner's new terms first (in video order), then the rest. */
 export function pickQuiz(questions: Question[], plan: PlanItem[], n = 5): Question[] {
   const first = new Map<number, Question>()

@@ -40,17 +40,6 @@ export function Quiz({ learner, video, plan, queued, onBack }: {
   const q = qs?.[i]
   return (
     <section className="mx-auto max-w-2xl space-y-8">
-      {queued.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Terms we didn't stop for</h2>
-          {queued.map((p) => (
-            <div key={p.term_id}>
-              <h3 className="font-medium">{p.term}</h3>
-              <p className="text-sm text-muted-foreground">{p.explanation}</p>
-            </div>
-          ))}
-        </div>
-      )}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {!qs && !error && <p role="status">Loading quiz…</p>}
       {qs && q && (
@@ -59,7 +48,7 @@ export function Quiz({ learner, video, plan, queued, onBack }: {
             <CardTitle>Question {i + 1} of {qs.length}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p>{q.question}</p>
+            <p className="font-serif text-lg leading-relaxed">{q.question}</p>
             <div className="grid gap-2">
               {q.options.map((o, k) => (
                 <Button key={k} variant={picked === k ? "default" : "outline"} onClick={() => choose(k)}
@@ -79,6 +68,21 @@ export function Quiz({ learner, video, plan, queued, onBack }: {
           <p className="text-lg font-semibold">Score {score}/{qs.length}</p>
           <Button onClick={onBack}>Back</Button>
         </div>
+      )}
+      {queued.length > 0 && (
+        <details className="rounded-lg border bg-card px-5 py-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            {queued.length} terms we didn't stop for
+          </summary>
+          <div className="mt-4 space-y-4">
+            {queued.map((p) => (
+              <div key={p.term_id}>
+                <h3 className="font-serif text-lg font-semibold">{p.term}</h3>
+                <p className="mt-1 font-serif leading-relaxed text-foreground/90">{p.explanation}</p>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   )
