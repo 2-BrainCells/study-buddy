@@ -91,6 +91,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check-endpoint", help="verify key, models and one JSON call")
+    r = sub.add_parser("reset-demo", help="delete all events and 'I already know this' clicks (dry run unless --yes)")
+    r.add_argument("--yes", action="store_true", help="really delete")
     sub.add_parser("check-usage", help="show what quota data Token Factory reports (no tokens used)")
     p = sub.add_parser("process", help="run the per-video pipeline on one video")
     p.add_argument("video", type=Path)
@@ -104,6 +106,16 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "eval-novelty":
         eval_novelty(args.learner, args.video, args.labels)
+    if args.command == "reset-demo":
+        import os
+
+        import psycopg
+        from app.learner import reset_sessions
+
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            counts = reset_sessions(conn, dry_run=not args.yes)
+        verb = "deleted" if args.yes else "would delete (run again with --yes)"
+        print(f"{verb}: {counts['events']} events, {counts['known_clicks']} 'I already know this' clicks")
     if args.command == "check-usage":
         from pipeline.llm import rate_limits
 

@@ -1,6 +1,16 @@
 """Tests for the novelty rules and text helpers (no models, no database)."""
 
-from app.learner import CoverageOut, Verdict, check_coverage, chunk_text, classify
+import httpx
+import openai
+from app.learner import (
+    OFFLINE,
+    CoverageOut,
+    Verdict,
+    check_coverage,
+    chunk_text,
+    classify,
+    safe_coverage,
+)
 from pipeline.embed import to_vector
 
 
@@ -13,7 +23,10 @@ class FakeTF:
 
     def chat_json(self, stage, out_model, messages, **kwargs):
         self.calls.append(stage)
-        return self.replies.pop(0)
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
 
 def verdict(term: str, covered: bool) -> Verdict:
@@ -67,3 +80,12 @@ def test_chunk_text_keeps_paragraphs_whole():
 
 def test_to_vector_is_pgvector_text():
     assert to_vector([0.1, 0.2]) == "[0.100000,0.200000]"
+
+
+def test_model_down_means_pause_on_every_open_term_and_say_why():
+    down = openai.APIConnectionError(request=httpx.Request("POST", "https://tf.test/v1/chat/completions"))
+    tf = FakeTF(down)
+    assert safe_coverage(tf, "alpha = 0.1", ["learning rate"], learner_id=1, video_id=1) == ({}, False)
+    assert safe_coverage(None, "alpha = 0.1", ["learning rate"], learner_id=1, video_id=1) == ({}, False)
+    assert classify("learning rate", {}, {}, checked=False) == ("new", OFFLINE)
+

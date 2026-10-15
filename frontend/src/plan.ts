@@ -35,6 +35,7 @@ export function reasonText(reason: string): string {
   const text: Record<string, string> = {
     "not in notes": "Not covered in your notes",
     "not checked against notes": "No notes cover it yet",
+    "notes check unavailable": "Couldn’t check your notes just now",
     "in your notes": "In your notes",
     "from your questionnaire": "From your questionnaire",
     "you marked it known": "You marked it known",

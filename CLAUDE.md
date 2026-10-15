@@ -89,4 +89,7 @@ Read it at the start of each build session.
 - Novelty eval (from backend/): python -m pipeline eval-novelty --learner <id> --video <id> --labels ../data/notes/labels_a.csv
 - Check the model endpoint: python -m pipeline check-endpoint
 - Check what quota Token Factory reports (no tokens used): python -m pipeline check-usage
+- Reset sessions before a recording (dry run without --yes): python -m pipeline reset-demo --yes
+- Public deploy: set DEMO_MODE=1 (no new learners or notes, so strangers can't spend the
+  $1/day model budget). Without a model, plans still load from cached data.
 - Process a video (from backend/): python -m pipeline process <video-path> --title "<title>"

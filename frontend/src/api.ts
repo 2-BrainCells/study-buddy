@@ -56,6 +56,7 @@ export const api = {
   quiz: (vid: number) => req<Question[]>(`/videos/${vid}/quiz`),
   known: (lid: number, video_id: number, term_id: number, ts: number) =>
     post(`/learners/${lid}/known`, { video_id, term_id, ts }),
+  config: () => req<{ demo: boolean }>("/config"),
   usage: () => req<Usage>("/usage"),
   dashboard: (vid: number) => req<Dashboard>(`/dashboard/videos/${vid}`),
   event: (e: { learner_id: number; video_id: number; type: EventType; term_id?: number; correct?: boolean; ts?: number }) =>

@@ -49,6 +49,7 @@ it("formats times and explains why a term paused", () => {
   expect(fmtTime(979.6)).toBe("16:19")
   expect(reasonText("not in notes")).toBe("Not covered in your notes")
   expect(reasonText("notes: alpha = 0.1")).toBe("In your notes: “alpha = 0.1”")
+  expect(reasonText("notes check unavailable")).toBe("Couldn’t check your notes just now")
   expect(reasonText("something new")).toBe("something new")
 })
 

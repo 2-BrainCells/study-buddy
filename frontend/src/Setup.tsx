@@ -25,11 +25,13 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
     Object.fromEntries(QUESTIONS.map(([k]) => [k, false])),
   )
   const [notes, setNotes] = useState("")
+  const [demo, setDemo] = useState(false)
 
   function load() {
-    Promise.all([api.learners(), api.videos()])
-      .then(([l, v]) => {
+    Promise.all([api.learners(), api.videos(), api.config()])
+      .then(([l, v, c]) => {
         setLearners(l)
+        setDemo(c.demo)
         setVideo(v[0] ?? null) // ponytail: one video for now; add a picker when there's a second
       })
       .catch((e) => setMsg(String(e)))
@@ -97,6 +99,12 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
         )}
         {msg && <p role="status" className="mt-4 text-sm">{msg}</p>}
       </div>
+      {demo ? (
+        <div className="self-start rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Public demo</p>
+          <p className="mt-1">Adding learners and notes is turned off here. Pick Learner A or B to see the two experiences.</p>
+        </div>
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle className="font-serif text-xl font-semibold">Add a learner</CardTitle>
@@ -125,6 +133,7 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
           </form>
         </CardContent>
       </Card>
+      )}
     </section>
   )
 }

@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+import openai
 import psycopg
 from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -85,9 +86,34 @@ def list_learners() -> list[dict]:
     ]
 
 
+def demo_mode() -> bool:
+    """DEMO_MODE=1 on the public deploy: no new learners or notes, so strangers can't spend the model budget."""
+    return os.environ.get("DEMO_MODE", "") == "1"
+
+
+def require_not_demo() -> None:
+    if demo_mode():
+        raise HTTPException(403, "Adding learners and notes is turned off in the public demo.")
+
+
+def optional_token_factory() -> TokenFactory | None:
+    """The model client, or None when its settings are missing (the app then runs from cached data)."""
+    try:
+        return token_factory()
+    except KeyError:
+        return None
+
+
+@api.get("/config")
+def get_config() -> dict:
+    """What the frontend needs to know about this deployment."""
+    return {"demo": demo_mode()}
+
+
 @api.post("/learners")
 def create_learner(body: NewLearner) -> dict:
     """Create a learner and seed the profile from the questionnaire."""
+    require_not_demo()
     with psycopg.connect(DATABASE_URL) as conn:
         learner_id = conn.execute(
             "INSERT INTO learners (name, questionnaire) VALUES (%s, %s) RETURNING id",
@@ -117,14 +143,21 @@ def warm_plans(learner_id: int) -> None:
         video_ids
     ):  # one connection per video, so one failure doesn't roll back the others
         with psycopg.connect(DATABASE_URL) as conn:
-            video_plan(conn, token_factory(), learner_id, video_id)
+            video_plan(conn, optional_token_factory(), learner_id, video_id)
 
 
 @api.post("/learners/{learner_id}/notes")
 def add_notes(learner_id: int, body: Notes, background: BackgroundTasks) -> dict:
     """Index typed notes into the learner's profile, then precompute their video plans in the background."""
-    with psycopg.connect(DATABASE_URL) as conn:
-        added = index_notes(conn, token_factory(), learner_id, body.text)
+    require_not_demo()
+    tf = optional_token_factory()
+    if tf is None:
+        raise HTTPException(503, "Reading notes needs the model, which isn't configured.")
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:  # rolled back on error, so no half-indexed notes
+            added = index_notes(conn, tf, learner_id, body.text)
+    except openai.APIError as e:
+        raise HTTPException(503, "The model is unavailable right now; try adding notes again later.") from e
     background.add_task(warm_plans, learner_id)
     return {"terms_added": added}
 
@@ -133,7 +166,7 @@ def add_notes(learner_id: int, body: Notes, background: BackgroundTasks) -> dict
 def get_plan(learner_id: int, video_id: int) -> list[dict]:
     """This learner's pause plan for one video."""
     with psycopg.connect(DATABASE_URL) as conn:
-        return video_plan(conn, token_factory(), learner_id, video_id)
+        return video_plan(conn, optional_token_factory(), learner_id, video_id)
 
 
 @api.post("/learners/{learner_id}/known")

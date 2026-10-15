@@ -116,3 +116,13 @@ repo; small samples are marked as such.
 | 59 | Error | The first dashboard failed the design critic (originality 5, craft 6, functionality 5) | The AMD numbers were below the fold (y=1176), a single-bar chart on a 0–4 axis, a 20-row table of zeros, "25 requests" included CPU runs, and raw stage ids | An "at a glance" row with both halves above the fold, a lecture strip in the player's timeline style, only terms with activity shown, only Token Factory requests counted, readable stage names | This commit |
 | 60 | Decision | Recharts removed again | Both charts were replaced by a CSS strip and inline bars, which read better with this little data | `npm uninstall recharts`; one dependency fewer | This commit |
 | 61 | Error | The phone dashboard overflowed by 14 px although my check said it didn't | I compared `scrollWidth` with `innerWidth`, which includes the 15 px scrollbar; the real cause was a grid with no column template below `lg` (the same mistake as #49) | `grid-cols-1` on the grid; checks now compare `scrollWidth` with `documentElement.clientWidth`, on every screen | This commit |
+
+## 10. Safety before deploying (16 Oct)
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 62 | Error | A plan request failed with a 500 when Token Factory was down (or the key was missing) | The notes-coverage call wasn't guarded | `safe_coverage` catches model errors, logs a warning, and returns no verdicts; every open term then pauses, with the reason "Couldn't check your notes just now". Tested live with the model URL pointed at a dead port: both learners' plans loaded | This commit |
+| 63 | Error | Adding notes with the model down gave a 500 | Unhandled `openai.APIError` | A 503 with a clear message; the notes insert rolls back (checked: 0 rows before and after) | This commit |
+| 64 | Decision | `DEMO_MODE=1` blocks new learners and notes on the public deploy | The API has no auth, and the notes endpoint spends the $1/day model budget | Both routes return 403; the setup screen shows a "Public demo" note instead of the form; `/api/config` tells the frontend. "I already know this" and events stay open (no model cost), and are cleared with the reset below | This commit |
+| 65 | Decision | `python -m pipeline reset-demo` clears all events and every "I already know this" click, keeping notes and cached verdicts | Recordings and judges should start from the same state | A dry run unless `--yes`, because it deletes data | This commit (not run yet) |
+

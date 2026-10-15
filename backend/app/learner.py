@@ -1,8 +1,17 @@
 """Learner profile (questionnaire + notes) and the per-video novelty check."""
 
+import logging
+
+import openai
+import pydantic
 from pipeline.embed import embed, to_vector
-from pipeline.llm import TokenFactory
+from pipeline.llm import EmptyReplyError, TokenFactory
 from pydantic import BaseModel, ConfigDict
+
+log = logging.getLogger(__name__)
+# what Token Factory can fail with after its own retries: network/HTTP errors, a reply that breaks the schema, empty
+MODEL_ERRORS = (openai.APIError, pydantic.ValidationError, EmptyReplyError)
+OFFLINE = "notes check unavailable"
 
 SEED_TERMS = {
     "calculus": ["derivative", "partial derivative", "chain rule", "gradient"],
@@ -106,11 +115,27 @@ def check_coverage(
     return {v.term.strip().lower(): v for v in out.verdicts}
 
 
+def safe_coverage(
+    tf: TokenFactory | None, notes: str, terms: list[str], learner_id: int, video_id: int
+) -> tuple[dict[str, Verdict], bool]:
+    """check_coverage, but a missing or failing model gives ({}, False) instead of an error.
+
+    The player then pauses on every term not in the profile, which is the safe side for a learner.
+    """
+    if tf is None:
+        return {}, False
+    try:
+        return check_coverage(tf, notes, terms, learner_id, video_id), True
+    except MODEL_ERRORS as e:
+        log.warning("notes coverage check failed for learner %s video %s: %s", learner_id, video_id, e)
+        return {}, False
+
+
 KNOWN_BECAUSE = {"questionnaire": "from your questionnaire", "notes": "in your notes", "video": "you marked it known"}
 
 
 def classify(
-    term: str, profile: dict[str, tuple[str, str]], verdicts: dict[str, Verdict]
+    term: str, profile: dict[str, tuple[str, str]], verdicts: dict[str, Verdict], checked: bool = True
 ) -> tuple[str, str]:
     """Return (status, reason): the learner's profile (status, source) first, then the notes-coverage verdict."""
     key = term.lower()
@@ -120,10 +145,8 @@ def classify(
         return ("known", KNOWN_BECAUSE.get(source, source)) if status == "known" else ("new", "not in notes")
     v = verdicts.get(key)
     if v is None:
-        return (
-            "new",
-            "not checked against notes",
-        )  # no notes, or the LLM skipped the term: visible, not hidden
+        # no notes, the LLM skipped the term, or the model was unreachable: visible, not hidden
+        return "new", ("not checked against notes" if checked else OFFLINE)
     return ("known", f"notes: {v.evidence}") if v.covered else ("new", "not in notes")
 
 
@@ -196,7 +219,7 @@ ON CONFLICT (learner_id, term_text) DO NOTHING
 """
 
 
-def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[dict]:
+def video_plan(conn, tf: TokenFactory | None, learner_id: int, video_id: int) -> list[dict]:
     """Every term in the video with this learner's status, the reason, and the closest known term."""
     profile = {
         term: (status, source)
@@ -211,7 +234,8 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
     rows = conn.execute(PLAN_SQL, {"lid": learner_id, "vid": video_id}).fetchall()
 
     pending = [(tid, term) for tid, term, *_ in rows if term.lower() not in profile]
-    verdicts = check_coverage(tf, notes, [t for _, t in pending], learner_id, video_id)
+    verdicts, checked = safe_coverage(tf, notes, [t for _, t in pending], learner_id, video_id)
+    checked = checked or not notes.strip()  # with no notes there was nothing to check
     for tid, term in pending:
         if (v := verdicts.get(term.lower())) is not None:
             status, source = ("known", "notes") if v.covered else ("new", "video")
@@ -219,7 +243,7 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
 
     plan = []
     for term_id, term, pause_ts, explanation, nearest, sim, mentions in rows:
-        status, reason = classify(term, profile, verdicts)
+        status, reason = classify(term, profile, verdicts, checked)
         plan.append(
             {
                 "term_id": term_id,
@@ -234,3 +258,20 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
             }
         )
     return plan
+
+
+def reset_sessions(conn, dry_run: bool = True) -> dict[str, int]:
+    """Before a recording: drop all events and every "I already know this" click; keep notes and cached verdicts.
+
+    Clicks are the only rows stored as (source video, status known); covered notes verdicts are source notes.
+    """
+    counts = {
+        "events": conn.execute("SELECT count(*) FROM events").fetchone()[0],
+        "known_clicks": conn.execute(
+            "SELECT count(*) FROM learner_terms WHERE source = 'video' AND status = 'known'"
+        ).fetchone()[0],
+    }
+    if not dry_run:
+        conn.execute("DELETE FROM events")
+        conn.execute("DELETE FROM learner_terms WHERE source = 'video' AND status = 'known'")
+    return counts
