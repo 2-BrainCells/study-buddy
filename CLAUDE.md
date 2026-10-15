@@ -8,12 +8,15 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
 ## Architecture
 - Per-video pipeline (once per video): faster-whisper on CPU reads the video
   directly (word timestamps) -> LLM finds terms per chunk -> code places each
-  pause at the end of the sentence that introduces the term -> explanations
+  pause at the end of the sentence that introduces the term -> near-duplicate
+  terms dropped (BGE-M3 cosine >= 0.90, earliest wording wins) -> explanations
   and quiz questions -> Postgres cache.
 - Per-learner loop: questionnaire + notes -> learner profile -> novelty check
   (profile match first, then one LLM call per learner per video judges which
-  remaining terms the notes cover; BGE-M3 finds the nearest known term for
-  the card) -> player pauses at the sentence end.
+  remaining terms the notes cover; it takes 100-210 s, so it runs in the
+  background after notes are indexed) -> player pauses at the sentence end
+  for the 5 new terms the transcript mentions most; the rest are saved for
+  the end.
 - Handwritten notes: photo -> vision model or OCR -> Markdown -> learner
   review -> indexer.
 - Ed-tech dashboard: where learners struggle (pauses, wrong quiz answers),
@@ -27,11 +30,16 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   faster-whisper on CPU. Local development uses the conda env "study-buddy";
   install packages there and don't create other environments. The app
   container has its own Python and installs from backend/requirements.txt.
-- frontend/: React, Vite, TypeScript, Tailwind, shadcn/ui, Recharts. This
-  project uses Vite, not my default Next.js: it's a static app served
-  behind FastAPI.
-- docker-compose.yml: app, postgres (web container decided Friday). No GPU
-  container. Postgres is on host port 5433, because a Windows Postgres 17
+- frontend/: React, Vite, TypeScript, Tailwind, shadcn/ui (Radix), Recharts.
+  This project uses Vite, not my default Next.js: it's a static app served
+  behind FastAPI. All API routes are under /api; in dev, Vite proxies /api
+  to localhost:8001. Design rules live in design/BRIEF.md (hybrid theme:
+  light paper page, dark lecture band; amber pause, grey saved, teal
+  skipped). Colours and fonts come only from the tokens in
+  frontend/src/index.css. index.html sets darkreader-lock on purpose.
+- docker-compose.yml: app, postgres. No web container: FastAPI will serve
+  frontend/dist (decided 15 Oct). The app mounts data/videos read-only as
+  VIDEO_DIR. No GPU container. Postgres is on host port 5433, because a Windows Postgres 17
   service holds 5432. Local DATABASE_URL uses localhost:5433; the app
   container uses postgres:5432.
 
@@ -65,11 +73,16 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   their code.
 - The build plan, data model and daily done criteria are in docs/PLAN.md.
 Read it at the start of each build session.
+- Errors hit and decisions made (cause and resolution for each) are logged
+  in docs/DECISIONS.md. Add a row whenever something breaks or a choice is
+  made.
 
 ## Commands
 - Run everything: docker compose up -d
 - Backend tests: python -m pytest -q (from backend/)
 - Lint: python -m ruff check backend
 - Frontend dev server: npm run dev (from frontend/)
+- Frontend tests: npm test (from frontend/)
+- Novelty eval (from backend/): python -m pipeline eval-novelty --learner <id> --video <id> --labels ../data/notes/labels_a.csv
 - Check the model endpoint: python -m pipeline check-endpoint
 - Process a video (from backend/): python -m pipeline process <video-path> --title "<title>"

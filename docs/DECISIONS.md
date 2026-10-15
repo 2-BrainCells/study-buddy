@@ -1,0 +1,104 @@
+# Errors and decisions log (12–15 Oct 2026)
+
+This log lists every error we hit and every design decision we made while building Study Buddy. Each entry
+gives its cause, how it was resolved, and the commit that holds the fix. Numbers come from runs in this
+repo; small samples are marked as such.
+
+**Type:**
+- **Error:** something broke or gave wrong results.
+- **Hindrance:** a tool or the environment got in the way.
+- **Decision:** a choice between options, with the reason.
+
+**Open** means not resolved yet.
+
+## 1. Model API (AMD Token Factory)
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 1 | Hindrance | `json_schema` structured output was rejected | Token Factory models report `structured_outputs: false` (checked 14 Oct) | Use `json_object` mode, put the schema in the system prompt, and validate every reply with Pydantic | 2926a19 |
+| 2 | Error | GLM-5.3-Flash returned 422 for `reasoning_effort="none"` | That model accepts only low, medium or high | Send "none" to MiMo and "low" to GLM; documented in CLAUDE.md | 2926a19 |
+| 3 | Error | Replies could come back empty | Thinking tokens use up `max_tokens` | Always send none or low reasoning; `EmptyReplyError` is counted and reported, not hidden | 2926a19 |
+| 4 | Error | 1 of 5 transcript chunks failed validation (MiMo nested a list inside `options`) | JSON mode guarantees valid JSON, not the right shape | One repair retry with the validation error in the prompt (stage `terms_repair`); chunks that still fail are counted | fa45a87 (the repair hasn't fired live yet) |
+| 5 | Decision | `max_tokens=4000` for term extraction | 8 terms × 2 quiz questions needs more than 2,000 tokens | Set in `process.py` | fa45a87 |
+| 6 | Decision | Retry only on 429/502/503, with exponential backoff, jitter and Retry-After; at most 8 concurrent requests, with a 3 s gap | About 20 requests per minute plus a daily spend cap | Built into the one client; every call logged per stage to `stage_costs` | 2926a19 |
+
+## 2. Environment and tooling (Windows, Docker, shells)
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 7 | Error | Postgres connections to port 5432 reached the wrong server | A Windows Postgres 17 service already held 5432 | Docker Postgres moved to host port 5433; local `DATABASE_URL` uses 5433, and the app container uses `postgres:5432` | fa45a87, 9fb3083 |
+| 8 | Error | `DATABASE_URL` failed to parse | `.env` contained `DATABASE_URL=DATABASE_URL=...` | `.env` fixed by hand; `.env.example` corrected | 9fb3083 |
+| 9 | Hindrance | The assistant couldn't read `.env` or `.env.example`, and a script that loaded `.env` was blocked | Project safety rules protect secrets | `.env` is edited by hand; the app loads it through `uvicorn --env-file` / `load_dotenv` | By design |
+| 10 | Decision | No separate ffmpeg step | faster-whisper reads the video directly through PyAV | Dropped from the plan and the docs | 46556b6 |
+| 11 | Hindrance | The Hugging Face model cache is about 4.35 GB | Windows has no symlinks, so cached files are duplicated | Accepted | Noted |
+| 12 | Hindrance | Several PowerShell 5.1 quirks broke commands | Here-strings don't pipe into `git commit -F -`. `conda run` passes no stdin. `curl` is an alias. `Get-Content -Raw` attaches file properties, which `ConvertTo-Json` serialised, so the notes POST got a 422 | Bash heredocs for commits, scripts in a scratch folder, `curl.exe` or `Invoke-RestMethod`, and `[IO.File]::ReadAllText` | Workarounds |
+| 13 | Error | `eval-novelty` crashed with `UnicodeDecodeError` | PowerShell 5.1's `>` writes UTF-16, and the label export command used it | The eval reads both UTF-16 and UTF-8 | d68c44b |
+| 14 | Error | `transcribe.py` got a syntax error after an automated edit | A Python heredoc turned `\n` escapes into real newlines | Rewritten with a direct file edit | 823172e |
+| 15 | Hindrance | `rm -rf` was blocked | A project hook blocks recursive deletes | The unused Vite demo files stay untracked and can be deleted by hand | **Open** (cosmetic) |
+| 16 | Hindrance | Port 8001 was already in use | A developer uvicorn with `--reload` was running there | Assistant checks ran on 8002; Vite proxies to 8001 | Workaround |
+| 17 | Hindrance | Waiting loops (`sleep`) were blocked while waiting for Stitch | A tool rule against waiting loops | Gave up on the Stitch mockups (see #46) | Workaround |
+
+## 3. Per-video pipeline and term quality
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 18 | Decision | The LLM never returns timestamps; code pauses at the next `.`, `?` or `!` after the term | LLM timestamps would be unreliable, while Whisper's word timestamps are exact | `place()` in `terms.py`; on the clip, the median delay after the first mention is 1.5 s and the maximum 12.2 s | fa45a87 |
+| 19 | Decision | One LLM call per sentence-aligned chunk of about 600 words | Rate limits, and whole sentences give the model context | `chunk()` | fa45a87 |
+| 20 | Error | Nested duplicates, e.g. "gradient" and "gradient descent" at the same pause | The LLM lists a term and part of it | A prompt rule, plus `drop_nested` (same pause, contained in a longer term) | d68c44b |
+| 21 | Error | Near-duplicates at different pauses: local optimum / local optima, initial point / initial starting point | Same idea, different wording | `drop_near_duplicates` at BGE-M3 cosine ≥ 0.90. On the clip, the duplicate pairs scored 0.90–0.91 and the distinct pairs (learning rate / rule, local / global minimum) scored 0.78–0.81. The threshold is tuned on one clip | 156a47c |
+| 22 | Decision | Remove the clip's two duplicates in place instead of re-running the pipeline | A re-run changes the whole term set and the video id, deletes events, invalidates labels and cached verdicts, and costs LLM time | Deleted in place (20 terms, 40 quiz questions); the filter now runs on every future pipeline run | 156a47c |
+| 23 | Error | Junk terms such as "12th part", "questions", "colon equals" | The LLM picks everyday words | A prompt rule removed some; "colon equals" still pauses for learner A | **Open** (prompt change + re-run) |
+| 24 | Decision | Shuffle quiz answer options before saving | The LLM tends to put the right answer in the same place | `shuffle_options` with a seeded RNG, so results are reproducible | fa45a87 |
+
+## 4. Learner profile and novelty check
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 25 | Decision | Learner A's notes are typed Markdown; handwriting is a Saturday stretch goal | Time, and the risk of a vision model or OCR step | Notes in `data/notes/learner_a.md` (not committed) | Decided 14 Oct |
+| 26 | Error | Bugs in the first learner-side code: `.enncode`, a stray `)` in `to_vector`, `"know"`, `"boderline"`, `extras=` | Typos in code that hadn't been run yet | All fixed, with tests for `to_vector`, `classify` and `chunk_text` | d68c44b |
+| 27 | Error | Similarity bands couldn't tell known terms from new ones: precision 0.80, recall 0.36, AUC about 0.61 (22 labelled terms) | BGE-M3 scores every short term between 0.52 and 0.73, so no threshold separates known from new | Bands dropped | d68c44b |
+| 28 | Error | Notes indexing missed ideas written as maths (the learning rate appears only as α) | The extraction prompt says to copy terms as written | One LLM coverage call per learner per video reads the notes directly. Precision 0.50–0.55 and recall 0.55 over 3 runs; 0.50 / 0.60 on 20 terms. It trades missed pauses for extra ones | d68c44b; trade-off **open** |
+| 29 | Hindrance | Inconsistent labels, e.g. local optimum = 1 but local optima = 0 | The label question was ambiguous ("studied the idea" vs "would want a card") | Labels fixed before the new results were seen; the prompt is frozen to avoid tuning it on the test set | Label question **open** |
+| 30 | Error | The coverage call takes 100–210 s | MiMo latency | Runs as a background task after notes are saved, so the plan is cached before the player asks for it | 823172e |
+| 31 | Error | Skip reasons read "in profile", which doesn't say why a term is known | The profile stored only a status | Reasons now come from the source (questionnaire, notes, or marked known). Covered verdicts are stored with source `notes`, and 8 existing rows were migrated | 988c306, 6ce7569 |
+| 32 | Decision | Re-indexing notes keeps "I already know this" clicks | A delete-all would erase those clicks | Only cached `new` verdicts are deleted | 823172e |
+
+## 5. Player behaviour
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 33 | Decision | Check for pauses every frame (`requestAnimationFrame`), not only on `timeupdate` | `timeupdate` fires only about every 250 ms, so pauses would cut into the next word | A frame loop, measured at 61 checks per second in a visible window | 823172e |
+| 34 | Error | Pauses were silently skipped when the window was hidden | Chrome throttles a hidden window to about 2 frames per second or stops it; the old guard (a jump of more than 1 s = a seek) mistook that for a seek | Seeks are detected from `video.seeking` and the `seeking` event; `timeupdate` backs up the frame loop; a test covers long gaps | 823172e |
+| 35 | Error | All 5 of learner B's pauses fell in the first 3 minutes of a 16-minute clip | The cap took the first 5 stops in time order | Pause at the 5 stops whose terms the transcript mentions most, kept in video order. Even spacing was rejected because it pushed "gradient descent" (24 mentions) to the end | 156a47c |
+| 36 | Decision | Serve the video through FastAPI's `FileResponse` | The browser needs Range support to seek | A Range request returns 206 | 823172e |
+| 37 | Decision | WebVTT captions built from the Whisper segments | Accessibility, and the data already existed | `to_vtt`, with a test | 823172e |
+| 38 | Decision | Event logging never blocks playback | A failed log shouldn't stop the lecture | Failures go to `console.error`: visible, not swallowed | 823172e |
+| 39 | Hindrance | Browser checks wrote test events | Playing into a pause logs real events | Each round's test rows were deleted by id; real events were kept | Done each round |
+
+## 6. Frontend setup and architecture
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 40 | Decision | Vite instead of Next.js; no web container | It's a static app served behind FastAPI | Vite proxies `/api` in development; FastAPI will serve `frontend/dist` | 823172e |
+| 41 | Decision | All API routes under `/api` | Avoids collisions with static files | `APIRouter(prefix="/api")`; `/health` stays at the root | 823172e |
+| 42 | Hindrance | `shadcn init` stopped at interactive prompts, and the preset `radix-nova` was rejected | The newer CLI asks for a component library and a preset | Run with `-b radix -p nova` | 823172e |
+| 43 | Hindrance | `baseUrl` is deprecated in TypeScript 6 | A TypeScript 6 change | The path alias is set through `paths` only | 823172e |
+| 44 | Decision | Native checkboxes and toggles; shadcn only for button, card, input, label and textarea | Newer shadcn component APIs differ between versions | Fewer APIs that could change | 823172e |
+| 45 | Decision | Vitest for the frontend logic tests | It's native to Vite; `node --test` can't resolve the `@/` alias | 8 tests on the pause and quiz logic | 823172e |
+
+## 7. Design
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 46 | Hindrance | Stitch mockups timed out | Generation was slow, and waiting loops were blocked | Three directions described in text, with contrast computed for each palette | — |
+| 47 | Decision | Direction B: dark, amber pause timeline, "Why it paused" line | Chosen for the buyer audience | The design critic failed it 3 times (phone video not staying stuck, sideways overflow, card below the fold) before passing it at 8/7/8/8 | 988c306 |
+| 48 | Error | Feedback: the design was too dark and too minimal | The Dark Reader browser extension was repainting the pages dark, and the brief carried a "no dashboard clutter" rule that nobody had asked for | Hybrid theme (light page, dark lecture band), a profile strip, session and skipped lists, a `darkreader-lock` meta tag, and a corrected brief. The critic passed it at 8/8/8/8 | 6ce7569 |
+| 49 | Error | Faint marks and broken layouts flagged by the critic | Amber on paper was about 1.8:1, form edges 1.39:1, and a no-wrap line stretched the phone layout to 521 px | Dark amber `--pause-ink` (5.4:1), form edges at 3.2–3.3:1, and `grid-cols-1` | 988c306, 6ce7569 |
+
+## 8. Process
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 50 | Hindrance | The Chrome extension disconnected or lost its tab group | Long scripts (over 10 s) and a hidden window | Reconnected with `/chrome`; shorter scripts and fresh tabs | Workaround |
+| 51 | Decision | Walkthroughs for new build steps unless asked to "do it" | The developer's learning goal | Followed; "do it" / "fix it" switched to building | Ongoing |
+| 52 | Decision | Never commit `data/` or `.env`; commits only through `/checkpoint`; every push confirmed | Project rules | Files staged explicitly, with a check before every commit | Ongoing |

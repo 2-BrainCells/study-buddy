@@ -26,7 +26,8 @@ cost per experience, and who pays (ed-tech companies).
      (stage terms_repair)
    - code finds each term in the word timestamps and pauses at the next
      . ? or ! (the LLM never returns timestamps); quiz options are shuffled
-   - BGE-M3 on CPU embeds each term; store in pgvector
+   - BGE-M3 on CPU embeds each term; near-duplicates (cosine >= 0.90) are
+     dropped, earliest wording wins; store in pgvector
 2. Per-learner loop
    - onboarding questionnaire (5 questions) seeds the learner profile
    - notes (typed Markdown/PDF now; handwriting photos as stretch) are
@@ -34,12 +35,13 @@ cost per experience, and who pays (ed-tech companies).
    - novelty check per video term: exact profile match first; then one LLM
      call per learner per video judges which remaining terms the notes cover
      (known / new, with a short quote from the notes as evidence); verdicts
-     cached in learner_terms (source video); BGE-M3 + pgvector find the
-     nearest known term for the card
+     cached in learner_terms (covered: source notes; not covered: source
+     video); runs in the background after notes are indexed
    - player (HTML5 video) loads the video cache + this learner's decisions
      once, then pauses locally at the sentence end for "new" terms
      (study mode) or shows a small card without pausing (glance mode);
-     cap pauses per video and queue the rest for the end
+     cap of 5 pauses, given to the new terms the transcript mentions most;
+     the rest are saved for the end
    - "I already know this" button updates the profile
    - end-of-video quiz from cached questions; wrong answers logged
 3. Ed-tech dashboard
@@ -104,7 +106,41 @@ cost per experience, and who pays (ed-tech companies).
   labelling a second clip, don't tune the prompt on these 22 terms.
 - Novelty call: 1.7k in / ~450 out tokens (~$0.0004 per learner per video)
   but 100-210 s latency, so it can't run on the player's first GET /plan;
-  precompute it after notes are indexed.
+  precompute it after notes are indexed (done: background task on POST notes).
+- Friday's work done a day early (commits 823172e, 988c306, 6ce7569, 156a47c):
+  - API under /api: video file with Range (seek works), WebVTT captions, quiz,
+    "I already know this", events (type validated), learner summary.
+  - Frontend (Vite/React/TS/Tailwind/shadcn): setup with learner cards,
+    player with study/glance modes, 5-pause cap, grouped cards, captions,
+    pause timeline, session and "Skipped for" lists, end-of-video quiz.
+  - Done criterion checked in the browser: A and B pause on different terms
+    at different moments (B: 5 pauses 1:17-7:15 incl. gradient descent, 15
+    saved; A: 5 pauses, 3 saved, 13 skipped with reasons).
+  - Bug found in the browser and fixed: a hidden window throttles frames to
+    ~2/s, and the old seek guard took that for a seek, so pauses were
+    skipped. Seeks now come from video.seeking; timeupdate backs up rAF.
+- Design: design/BRIEF.md. The first all-dark direction passed the
+  design-critic, but you found it too dark and too minimal. The hybrid
+  (light page, dark lecture band, amber/grey/teal status colours) then
+  passed at 8/8/8/8 (pass marks 7/7/8/8, so no margin on craft and
+  functionality). Contrast was computed for every token pair. Dark
+  Reader in your Chrome was recolouring the page; index.html now locks
+  it out.
+- Pause choice: the cap used to take the first 5 stops, so all of B's
+  pauses fell in the first 3 min. It now takes the 5 most-mentioned terms
+  (substring count over the transcript; a rough importance signal tuned
+  on one clip).
+- Near-duplicates: in this clip, BGE-M3 >= 0.90 caught exactly local
+  optimum/optima and initial point/initial starting point. Learning
+  rate/rule (0.81) and local/global minimum (0.78) are distinct ideas and
+  were kept. The clip's two duplicates were deleted in place: 20 terms,
+  40 quiz Qs. Novelty eval on the 20 labels: precision 0.50, recall 0.60.
+- Open:
+  - junk terms that aren't duplicates ("colon equals") still pause; this
+    needs a prompt change and a pipeline re-run
+  - the Docker image isn't rebuilt yet, and the frontend isn't in it
+  - unused Vite demo files are still in frontend/
+  - the novelty label question is still ambiguous
 
 ## Build order and done criteria
 
