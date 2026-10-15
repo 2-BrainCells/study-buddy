@@ -71,11 +71,17 @@ class Event(BaseModel):
 
 @api.get("/learners")
 def list_learners() -> list[dict]:
+    """Learners with their questionnaire answers and how many terms their notes added (for the profile strip)."""
     with psycopg.connect(DATABASE_URL) as conn:
-        return [
-            {"id": i, "name": n}
-            for i, n in conn.execute("SELECT id, name FROM learners ORDER BY id")
-        ]
+        rows = conn.execute(
+            "SELECT l.id, l.name, l.questionnaire,"
+            " (SELECT count(*) FROM learner_terms lt WHERE lt.learner_id = l.id AND lt.source = 'notes')"
+            " FROM learners l ORDER BY l.id"
+        ).fetchall()
+    return [
+        {"id": i, "name": n, "questionnaire": q or {}, "note_terms": c}
+        for i, n, q, c in rows
+    ]
 
 
 @api.post("/learners")

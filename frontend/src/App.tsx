@@ -33,32 +33,33 @@ export default function App() {
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
           <h1 className="text-sm font-semibold tracking-tight">Study Buddy</h1>
           {screen.name !== "setup" && (
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-muted-foreground">{screen.learner.name}</span>
-              <button type="button" onClick={() => setScreen({ name: "setup" })}
-                      className="rounded-md px-2 py-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2">
-                Switch learner
-              </button>
-            </div>
+            <button type="button" onClick={() => setScreen({ name: "setup" })}
+                    className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2">
+              Switch learner
+            </button>
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">
-      {screen.name === "setup" && <Setup onStart={start} error={error} />}
-      {screen.name === "loading" && (
-        <p role="status" className="text-muted-foreground">
-          Preparing {screen.learner.name}'s plan… the first time can take a few minutes.
-        </p>
+      {screen.name === "play" ? (
+        // full width: the player draws its own dark lecture band edge to edge
+        <main>
+          <Player learner={screen.learner} video={screen.video} plan={screen.plan}
+                  onDone={(queued) => setScreen({ ...screen, name: "quiz", queued })} />
+        </main>
+      ) : (
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          {screen.name === "setup" && <Setup onStart={start} error={error} />}
+          {screen.name === "loading" && (
+            <p role="status" className="text-muted-foreground">
+              Preparing {screen.learner.name}'s plan… the first time can take a few minutes.
+            </p>
+          )}
+          {screen.name === "quiz" && (
+            <Quiz learner={screen.learner} video={screen.video} plan={screen.plan} queued={screen.queued}
+                  onBack={() => setScreen({ name: "setup" })} />
+          )}
+        </main>
       )}
-      {screen.name === "play" && (
-        <Player learner={screen.learner} video={screen.video} plan={screen.plan}
-                onDone={(queued) => setScreen({ ...screen, name: "quiz", queued })} />
-      )}
-      {screen.name === "quiz" && (
-        <Quiz learner={screen.learner} video={screen.video} plan={screen.plan} queued={screen.queued}
-              onBack={() => setScreen({ name: "setup" })} />
-      )}
-      </main>
     </>
   )
 }

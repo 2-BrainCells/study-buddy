@@ -24,12 +24,32 @@ export function crossed(stops: Stop[], fired: Set<number>, prev: number, now: nu
 /** "m:ss" for a time in seconds. */
 export const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`
 
-/** The learner-facing "why it paused" line for a new term's reason from the plan API. */
-export function whyText(reason: string): string {
-  if (reason === "not in notes") return "Not covered in your notes"
-  if (reason === "not checked against notes") return "No notes cover it yet"
-  return reason // ponytail: unknown reasons shown as-is, so a new backend reason is visible rather than hidden
+/** Learner-facing text for a plan reason: why a term pauses, or why it was skipped. */
+export function reasonText(reason: string): string {
+  if (reason.startsWith("notes: ")) return `In your notes: “${reason.slice(7)}”`
+  const text: Record<string, string> = {
+    "not in notes": "Not covered in your notes",
+    "not checked against notes": "No notes cover it yet",
+    "in your notes": "In your notes",
+    "from your questionnaire": "From your questionnaire",
+    "you marked it known": "You marked it known",
+  }
+  return text[reason] ?? reason // ponytail: unknown reasons shown as-is, so a new backend reason is visible
 }
+
+export const TOPICS: Record<string, string> = {
+  calculus: "calculus",
+  linear_algebra: "linear algebra",
+  probability: "probability",
+  ml_basics: "ML basics",
+  python: "Python",
+}
+
+/** "calculus, Python" from questionnaire answers, in questionnaire order. */
+export const comfortableWith = (answers: Record<string, boolean>) =>
+  Object.keys(TOPICS).filter((k) => answers[k]).map((k) => TOPICS[k]).join(", ")
+
+export const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()
 
 /** n questions, one per term: this learner's new terms first (in video order), then the rest. */
 export function pickQuiz(questions: Question[], plan: PlanItem[], n = 5): Question[] {

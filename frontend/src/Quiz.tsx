@@ -3,6 +3,8 @@ import { api, type Learner, type PlanItem, type Question, type Video } from "@/a
 import { pickQuiz } from "@/plan"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import { ChevronDown } from "lucide-react"
 
 export function Quiz({ learner, video, plan, queued, onBack }: {
   learner: Learner
@@ -40,23 +42,30 @@ export function Quiz({ learner, video, plan, queued, onBack }: {
   const q = qs?.[i]
   return (
     <section className="mx-auto max-w-2xl space-y-8">
+      <h2 className="font-serif text-3xl font-semibold">{learner.name}'s quiz</h2>
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {!qs && !error && <p role="status">Loading quiz…</p>}
       {qs && q && (
         <Card>
           <CardHeader>
-            <CardTitle>Question {i + 1} of {qs.length}</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Question {i + 1} of {qs.length}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="font-serif text-lg leading-relaxed">{q.question}</p>
+          <CardContent className="space-y-4">
+            <p className="font-serif text-2xl leading-snug font-semibold">{q.question}</p>
             <div className="grid gap-2">
               {q.options.map((o, k) => (
-                <Button key={k} variant={picked === k ? "default" : "outline"} onClick={() => choose(k)}
-                        className="h-auto justify-start py-2 text-left whitespace-normal">
+                <button key={k} type="button" onClick={() => choose(k)} aria-pressed={picked === k}
+                        className={cn(
+                          "min-h-12 w-full rounded-md border bg-card px-4 py-3 text-left text-sm transition-colors duration-150 ease-calm",
+                          "focus-visible:outline-2 focus-visible:outline-offset-2",
+                          picked === null && "hover:border-pause-ink",
+                          picked !== null && k === q.answer && "border-known bg-known/10",
+                          picked === k && k !== q.answer && "border-destructive bg-destructive/10",
+                        )}>
                   {o}
-                  {picked !== null && k === q.answer && " (correct answer)"}
-                  {picked === k && k !== q.answer && " (your answer, wrong)"}
-                </Button>
+                  {picked !== null && k === q.answer && <span className="font-medium text-known"> (correct answer)</span>}
+                  {picked === k && k !== q.answer && <span className="font-medium text-destructive"> (your answer, wrong)</span>}
+                </button>
               ))}
             </div>
             {picked !== null && <Button autoFocus onClick={next}>Next</Button>}
@@ -70,9 +79,11 @@ export function Quiz({ learner, video, plan, queued, onBack }: {
         </div>
       )}
       {queued.length > 0 && (
-        <details className="rounded-lg border bg-card px-5 py-4">
-          <summary className="cursor-pointer text-sm font-medium">
+        <details className="group rounded-lg border bg-card px-5 py-4">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
+            <span aria-hidden className="size-2 rounded-full bg-muted-foreground" />
             {queued.length} terms we didn't stop for
+            <ChevronDown aria-hidden className="ml-auto size-4 text-muted-foreground transition-transform duration-150 ease-calm group-open:rotate-180" />
           </summary>
           <div className="mt-4 space-y-4">
             {queued.map((p) => (

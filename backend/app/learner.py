@@ -106,18 +106,18 @@ def check_coverage(
     return {v.term.strip().lower(): v for v in out.verdicts}
 
 
+KNOWN_BECAUSE = {"questionnaire": "from your questionnaire", "notes": "in your notes", "video": "you marked it known"}
+
+
 def classify(
-    term: str, profile: dict[str, str], verdicts: dict[str, Verdict]
+    term: str, profile: dict[str, tuple[str, str]], verdicts: dict[str, Verdict]
 ) -> tuple[str, str]:
-    """Return (status, reason): the learner's profile first, then the notes-coverage verdict."""
+    """Return (status, reason): the learner's profile (status, source) first, then the notes-coverage verdict."""
     key = term.lower()
     if key in profile:
-        # profile rows marked new only come from cached notes verdicts, so say that rather than "in profile"
-        return (
-            ("known", "in profile")
-            if profile[key] == "known"
-            else ("new", "not in notes")
-        )
+        status, source = profile[key]
+        # profile rows marked new only come from cached notes verdicts
+        return ("known", KNOWN_BECAUSE.get(source, source)) if status == "known" else ("new", "not in notes")
     v = verdicts.get(key)
     if v is None:
         return (
@@ -180,22 +180,23 @@ WHERE t.video_id = %(vid)s
 ORDER BY t.pause_ts
 """
 
+# covered terms are stored as source 'notes' (the notes cover them); not-covered ones as 'video'
 # ponytail: the evidence quote is only shown on the first load; add an evidence column if the card needs it
 SAVE_VERDICT = """
 INSERT INTO learner_terms (learner_id, term_text, embedding, status, source)
-SELECT %s, lower(term), embedding, %s, 'video' FROM terms WHERE id = %s
+SELECT %s, lower(term), embedding, %s, %s FROM terms WHERE id = %s
 ON CONFLICT (learner_id, term_text) DO NOTHING
 """
 
 
 def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[dict]:
     """Every term in the video with this learner's status, the reason, and the closest known term."""
-    profile = dict(
-        conn.execute(
-            "SELECT term_text, status FROM learner_terms WHERE learner_id = %s",
-            (learner_id,),
-        ).fetchall()
-    )
+    profile = {
+        term: (status, source)
+        for term, status, source in conn.execute(
+            "SELECT term_text, status, source FROM learner_terms WHERE learner_id = %s", (learner_id,)
+        )
+    }
     notes = conn.execute(
         "SELECT coalesce(string_agg(text, ' '), '') FROM notes WHERE learner_id = %s",
         (learner_id,),
@@ -206,9 +207,8 @@ def video_plan(conn, tf: TokenFactory, learner_id: int, video_id: int) -> list[d
     verdicts = check_coverage(tf, notes, [t for _, t in pending], learner_id, video_id)
     for tid, term in pending:
         if (v := verdicts.get(term.lower())) is not None:
-            conn.execute(
-                SAVE_VERDICT, (learner_id, "known" if v.covered else "new", tid)
-            )
+            status, source = ("known", "notes") if v.covered else ("new", "video")
+            conn.execute(SAVE_VERDICT, (learner_id, status, source, tid))
 
     plan = []
     for term_id, term, pause_ts, explanation, nearest, sim in rows:

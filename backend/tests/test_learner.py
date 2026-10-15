@@ -24,14 +24,14 @@ def verdict(term: str, covered: bool) -> Verdict:
 
 def test_profile_wins_over_verdict():
     v = {"gradient descent": verdict("gradient descent", True)}
-    assert classify("Gradient Descent", {"gradient descent": "new"}, v) == (
-        "new",
-        "not in notes",
-    )
-    assert classify("Gradient Descent", {"gradient descent": "known"}, {}) == (
-        "known",
-        "in profile",
-    )
+    assert classify("Gradient Descent", {"gradient descent": ("new", "video")}, v) == ("new", "not in notes")
+
+
+def test_known_reason_says_where_the_learner_knows_it_from():
+    profile = {"chain rule": ("known", "questionnaire"), "mse": ("known", "notes"), "contours": ("known", "video")}
+    assert classify("Chain rule", profile, {})[1] == "from your questionnaire"
+    assert classify("MSE", profile, {})[1] == "in your notes"
+    assert classify("contours", profile, {})[1] == "you marked it known"
 
 
 def test_verdict_decides_terms_not_in_profile():

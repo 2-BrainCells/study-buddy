@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 import type { PlanItem, Question } from "@/api"
-import { buildStops, crossed, fmtTime, pickQuiz, whyText } from "@/plan"
+import { buildStops, comfortableWith, crossed, fmtTime, initials, pickQuiz, reasonText } from "@/plan"
 
 const item = (term_id: number, pause_ts: number, status: "new" | "known" = "new"): PlanItem => ({
   term_id, term: `t${term_id}`, pause_ts, explanation: "", status, reason: "", nearest: null, sim: null,
@@ -39,6 +39,12 @@ it("quiz asks about new terms first, one question per term", () => {
 it("formats times and explains why a term paused", () => {
   expect(fmtTime(19.04)).toBe("0:19")
   expect(fmtTime(979.6)).toBe("16:19")
-  expect(whyText("not in notes")).toBe("Not covered in your notes")
-  expect(whyText("something new")).toBe("something new")
+  expect(reasonText("not in notes")).toBe("Not covered in your notes")
+  expect(reasonText("notes: alpha = 0.1")).toBe("In your notes: “alpha = 0.1”")
+  expect(reasonText("something new")).toBe("something new")
+})
+
+it("summarises a learner profile", () => {
+  expect(comfortableWith({ python: true, calculus: true, probability: false })).toBe("calculus, Python")
+  expect(initials("Learner A")).toBe("LA")
 })

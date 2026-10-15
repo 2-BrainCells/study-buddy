@@ -10,7 +10,7 @@ export type PlanItem = {
 }
 export type Question = { id: number; term_id: number; question: string; options: string[]; answer: number }
 export type Video = { id: number; title: string; source: string; licence: string; duration_s: number }
-export type Learner = { id: number; name: string }
+export type Learner = { id: number; name: string; questionnaire: Record<string, boolean>; note_terms: number }
 type EventType = "pause" | "glance" | "quiz_answer"
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

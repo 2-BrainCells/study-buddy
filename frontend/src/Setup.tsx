@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
 import { api, type Learner, type Video } from "@/api"
+import { comfortableWith, initials } from "@/plan"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
-const TOPICS = [
+const QUESTIONS = [
   ["calculus", "Calculus (derivatives, chain rule)"],
   ["linear_algebra", "Linear algebra (vectors, matrices)"],
   ["probability", "Probability (random variables, expected value)"],
@@ -21,7 +22,7 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
   const [busy, setBusy] = useState(false)
   const [name, setName] = useState("")
   const [answers, setAnswers] = useState<Record<string, boolean>>(
-    Object.fromEntries(TOPICS.map(([k]) => [k, false])),
+    Object.fromEntries(QUESTIONS.map(([k]) => [k, false])),
   )
   const [notes, setNotes] = useState("")
 
@@ -57,29 +58,48 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
   }
 
   return (
-    <section className="grid gap-8 lg:grid-cols-2">
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Watch as</h2>
-        {!video && <p className="text-muted-foreground">No processed video yet.</p>}
+    <section className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div>
+        <h2 className="font-serif text-3xl leading-tight font-semibold text-balance sm:text-4xl">
+          The lecture pauses where <em>you</em> need it.
+        </h2>
+        <p className="mt-3 max-w-[60ch] text-muted-foreground">
+          Study Buddy reads a learner's notes and questionnaire, then stops the lecture only at terms that are new
+          to them, explains each one in plain English, and ends with a short quiz. Two learners, one lecture,
+          two different experiences.
+        </p>
+
+        <h3 className="mt-10 text-sm font-medium">Watch {video ? video.title : "a lecture"} as</h3>
+        {!video && <p className="mt-2 text-muted-foreground">No processed video yet.</p>}
         {video && (
-          <>
-            <p className="text-sm text-muted-foreground">{video.title}</p>
-            <div className="flex flex-wrap gap-3">
-              {learners.map((l) => (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {learners.map((l) => {
+              const topics = comfortableWith(l.questionnaire)
+              return (
                 <button key={l.id} type="button" onClick={() => onStart(l, video)}
-                        className="min-w-36 rounded-lg border bg-card px-4 py-3 text-left transition-colors duration-150 ease-calm hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2">
-                  <span className="block text-sm font-medium">{l.name}</span>
-                  <span className="block text-xs text-muted-foreground">Watch as this learner</span>
+                        className="group flex items-start gap-3 rounded-lg border bg-card p-4 text-left transition-colors duration-150 ease-calm hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2">
+                  <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-sm font-semibold">
+                    {initials(l.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-serif text-lg font-semibold">{l.name}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {topics ? `Comfortable with ${topics}` : "A beginner: no topics ticked"}
+                    </span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {l.note_terms ? `${l.note_terms} terms from notes` : "No notes yet"}
+                    </span>
+                  </span>
                 </button>
-              ))}
-            </div>
-          </>
+              )
+            })}
+          </div>
         )}
-        {msg && <p role="status" className="text-sm">{msg}</p>}
+        {msg && <p role="status" className="mt-4 text-sm">{msg}</p>}
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>New learner</CardTitle>
+          <CardTitle className="font-serif text-xl font-semibold">Add a learner</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); create() }}>
@@ -89,7 +109,7 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
             </div>
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">I'm comfortable with</legend>
-              {TOPICS.map(([k, label]) => (
+              {QUESTIONS.map(([k, label]) => (
                 <div key={k} className="flex items-center gap-2">
                   <input id={k} type="checkbox" className="size-4 accent-primary" checked={answers[k]}
                          onChange={(e) => setAnswers({ ...answers, [k]: e.target.checked })} />
