@@ -5,6 +5,7 @@ CREATE TABLE videos (
     title        text NOT NULL,
     source       text NOT NULL,
     licence      text NOT NULL,
+    file         text,                  -- file name inside VIDEO_DIR
     duration_s   real,
     processed_at timestamptz
 );

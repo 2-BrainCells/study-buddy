@@ -142,7 +142,7 @@ def index_notes(conn, tf: TokenFactory, learner_id: int, text: str) -> int:
     """Store typed notes, ask the LLM which terms they cover, add those to the profile."""
     # new notes can change coverage verdicts, so drop the cached ones
     conn.execute(
-        "DELETE FROM learner_terms WHERE learner_id = %s AND source = 'video'",
+        "DELETE FROM learner_terms WHERE learner_id = %s AND source = 'video' AND status = 'new'",
         (learner_id,),
     )
     conn.execute(

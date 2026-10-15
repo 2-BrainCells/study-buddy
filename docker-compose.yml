@@ -4,6 +4,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/studybuddy
+      VIDEO_DIR: /data/videos
+    volumes: ["./data/videos:/data/videos:ro"]
     ports: ["8000:8000"]
     depends_on:
       postgres:

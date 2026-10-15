@@ -73,3 +73,15 @@ def transcribe(video: Path) -> tuple[list[Segment], float, int]:
 
 def _from_dict(d: dict) -> Segment:
     return Segment(d["start"], d["end"], d["text"], [Word(**w) for w in d["words"]])
+
+
+def to_vtt(rows: list[tuple[float, float, str]]) -> str:
+    """WebVTT captions from (start_s, end_s, text) segment rows."""
+
+    def stamp(s: float) -> str:
+        h, rem = divmod(s, 3600)
+        m, sec = divmod(rem, 60)
+        return f"{int(h):02}:{int(m):02}:{sec:06.3f}"
+
+    cues = (f"{stamp(a)} --> {stamp(b)}\n{t.strip()}" for a, b, t in rows)
+    return "WEBVTT\n\n" + "\n\n".join(cues) + "\n"

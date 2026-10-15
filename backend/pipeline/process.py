@@ -31,8 +31,8 @@ def process(video: Path, title: str) -> None:
     with psycopg.connect(db) as conn:  # committed now so cost rows can reference it
         conn.execute("DELETE FROM videos WHERE title = %s", (title,))
         video_id = conn.execute(
-            "INSERT INTO videos (title, source, licence) VALUES (%s, %s, %s) RETURNING id",
-            (title, SOURCE, LICENCE),
+            "INSERT INTO videos (title, source, licence, file) VALUES (%s, %s, %s, %s) RETURNING id",
+            (title, SOURCE, LICENCE, video.name),
         ).fetchone()[0]
 
     segments, duration, transcribe_ms = transcribe(video)
