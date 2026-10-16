@@ -96,7 +96,7 @@ def chunk_text(text: str, size: int = 600) -> list[str]:
 
 
 def check_coverage(
-    tf: TokenFactory, notes: str, terms: list[str], learner_id: int, video_id: int
+    tf: TokenFactory, notes: str, terms: list[str], learner_id: int, video_id: int, model: str | None = None
 ) -> dict[str, Verdict]:
     """One LLM call: which video terms do the learner's notes already cover? Keys are lowercased terms."""
     if not notes.strip() or not terms:
@@ -111,6 +111,7 @@ def check_coverage(
         [{"role": "user", "content": prompt}],
         learner_id=learner_id,
         video_id=video_id,
+        model=model,
     )
     return {v.term.strip().lower(): v for v in out.verdicts}
 
@@ -118,17 +119,21 @@ def check_coverage(
 def safe_coverage(
     tf: TokenFactory | None, notes: str, terms: list[str], learner_id: int, video_id: int
 ) -> tuple[dict[str, Verdict], bool]:
-    """check_coverage, but a missing or failing model gives ({}, False) instead of an error.
+    """check_coverage on NOVELTY_MODEL if set, then on LLM_MODEL; if both fail (or there's no model), ({}, False).
 
-    The player then pauses on every term not in the profile, which is the safe side for a learner.
+    Models come and go on Token Factory (Gemma vanished for part of 16 Oct), so the preferred model never blocks
+    a plan. With no verdicts the player pauses on every term not in the profile: the safe side for a learner.
     """
     if tf is None:
         return {}, False
-    try:
-        return check_coverage(tf, notes, terms, learner_id, video_id), True
-    except MODEL_ERRORS as e:
-        log.warning("notes coverage check failed for learner %s video %s: %s", learner_id, video_id, e)
-        return {}, False
+    preferred = tf.settings.novelty_model
+    for model in [preferred, None] if preferred else [None]:  # None means LLM_MODEL
+        try:
+            return check_coverage(tf, notes, terms, learner_id, video_id, model=model), True
+        except MODEL_ERRORS as e:
+            log.warning("notes coverage check on %s failed for learner %s video %s: %s",
+                        model or "LLM_MODEL", learner_id, video_id, e)
+    return {}, False
 
 
 KNOWN_BECAUSE = {"questionnaire": "from your questionnaire", "notes": "in your notes", "video": "you marked it known"}

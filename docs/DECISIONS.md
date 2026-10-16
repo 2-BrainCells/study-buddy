@@ -126,3 +126,12 @@ repo; small samples are marked as such.
 | 64 | Decision | `DEMO_MODE=1` blocks new learners and notes on the public deploy | The API has no auth, and the notes endpoint spends the $1/day model budget | Both routes return 403; the setup screen shows a "Public demo" note instead of the form; `/api/config` tells the frontend. "I already know this" and events stay open (no model cost), and are cleared with the reset below | This commit |
 | 65 | Decision | `python -m pipeline reset-demo` clears all events and every "I already know this" click, keeping notes and cached verdicts | Recordings and judges should start from the same state | A dry run unless `--yes`, because it deletes data | This commit (not run yet) |
 
+## 11. Gemma for the novelty check (16 Oct)
+
+| # | Type | What happened / what was decided | Cause | Resolution | Status / commit |
+|---|---|---|---|---|---|
+| 66 | Decision | The novelty check runs on Gemma-4-31B-IT (`NOVELTY_MODEL`); everything else stays on MiMo | Google DeepMind joined as a partner, with a $5,000 Gemma prize; the novelty check was the only stage with a fair test (20 labels, prompt frozen since 15 Oct) | Head to head on learner A: Gemma precision 0.46 / recall 0.60 in all 3 runs, against MiMo 0.50 / 0.60 (one extra false "known", within noise at n = 20). Gemma takes 9–11 s per call against MiMo's 103–210 s, gave identical verdicts every run, and costs about $0.00009 per call against $0.00036 | This commit |
+| 67 | Hindrance | Gemma-4-31B-IT disappeared from Token Factory for part of 16 Oct (other teams saw the same), then came back | Model availability on Token Factory changes | A per-stage model with a fallback: `NOVELTY_MODEL`, then `LLM_MODEL`, then the offline path. `check-endpoint --model` probes any model | This commit |
+| 68 | Decision | Gemma's price is derived from Token Factory's own bill: $0.035 / $0.079 per million input / output tokens | No published list price was found | Billed cost ÷ uncached tokens; the same method reproduces MiMo's list price exactly, so it's trustworthy. Labelled as derived in the code | This commit |
+| 69 | Decision | MiMo's earlier verdicts for learner A were backed up before the experiment and replaced by Gemma's | The cache was the only copy of MiMo's verdicts | Backup kept outside the repo; restore only if we switch back | This commit |
+

@@ -1,5 +1,7 @@
 """Tests for the novelty rules and text helpers (no models, no database)."""
 
+from types import SimpleNamespace
+
 import httpx
 import openai
 from app.learner import (
@@ -17,12 +19,15 @@ from pipeline.embed import to_vector
 class FakeTF:
     """Stands in for TokenFactory: returns canned replies in order and records each call's stage."""
 
-    def __init__(self, *replies):
+    def __init__(self, *replies, novelty_model=None):
         self.replies = list(replies)
         self.calls: list[str] = []
+        self.models: list[str | None] = []
+        self.settings = SimpleNamespace(novelty_model=novelty_model)
 
     def chat_json(self, stage, out_model, messages, **kwargs):
         self.calls.append(stage)
+        self.models.append(kwargs.get("model"))
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -88,4 +93,12 @@ def test_model_down_means_pause_on_every_open_term_and_say_why():
     assert safe_coverage(tf, "alpha = 0.1", ["learning rate"], learner_id=1, video_id=1) == ({}, False)
     assert safe_coverage(None, "alpha = 0.1", ["learning rate"], learner_id=1, video_id=1) == ({}, False)
     assert classify("learning rate", {}, {}, checked=False) == ("new", OFFLINE)
+
+
+def test_novelty_uses_its_own_model_and_falls_back_to_the_default():
+    down = openai.APIConnectionError(request=httpx.Request("POST", "https://tf.test/v1/chat/completions"))
+    tf = FakeTF(down, CoverageOut(verdicts=[verdict("learning rate", True)]), novelty_model="Gemma-4-31B-IT")
+    verdicts, checked = safe_coverage(tf, "alpha = 0.1", ["learning rate"], learner_id=1, video_id=1)
+    assert checked and list(verdicts) == ["learning rate"]
+    assert tf.models == ["Gemma-4-31B-IT", None]  # Gemma first, then LLM_MODEL
 

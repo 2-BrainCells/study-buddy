@@ -6,7 +6,11 @@ from pipeline.llm import Settings, quota_summary, rate_limits
 
 # USD per million (input, output) tokens at Token Factory list price, checked 14 Oct. Models without a price
 # show cost as None ("n/a"), never a guess. Token Factory's own bill is lower when prompt caching hits.
-PRICES = {"MiMo-V2.6-Flash": (0.14, 0.28)}
+PRICES = {
+    "MiMo-V2.6-Flash": (0.14, 0.28),
+    # derived 16 Oct from Token Factory's own bill (uncached input tokens; the same method reproduces MiMo's list price)
+    "Gemma-4-31B-IT": (0.035, 0.079),
+}
 QUOTA_TTL_S = 60
 
 

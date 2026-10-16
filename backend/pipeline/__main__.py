@@ -17,12 +17,39 @@ class Ping(BaseModel):
     word: str
 
 
-def check_endpoint() -> int:
+def probe_model(tf: TokenFactory, model: str) -> int:
+    """Is `model` served, does JSON mode work, and which reasoning_effort values does it accept?"""
+    served = model in tf.list_models()
+    print(f"{model} listed: {served}")
+    if not served:
+        return 1
+    ok = False
+    for effort in ("none", "low"):
+        try:
+            reply = tf.chat_json(
+                "check",
+                Ping,
+                [{"role": "user", "content": 'Reply with ok=true and word="hello".'}],
+                model=model,
+                reasoning_effort=effort,
+            )
+            print(f"  reasoning_effort={effort}: PASS {reply}")
+            ok = ok or reply.ok
+        except Exception as e:  # noqa: BLE001  CLI probe: report each failure and keep going
+            print(
+                f"  reasoning_effort={effort}: FAIL {type(e).__name__}: {str(e)[:200]}"
+            )
+    return 0 if ok else 1
+
+
+def check_endpoint(model: str | None = None) -> int:
     """Verify key, model names and one strict-JSON call. Returns an exit code."""
     try:
         tf = TokenFactory(
             Settings.from_env(), cost_sink=print
         )  # a check doesn't belong in stage_costs
+        if model:
+            return probe_model(tf, model)
         print("models:", ", ".join(tf.check_models()))
         reply = tf.chat_json(
             "check",
@@ -75,9 +102,7 @@ def eval_novelty(learner_id: int, video_id: int, labels: Path) -> None:
         fp += known and not actual
         fn += not known and actual
         tn += not known and not actual
-    print(
-        f"\nTP {tp}  FP {fp}  FN {fn}  TN {tn}  unlabelled {skipped}"
-    )
+    print(f"\nTP {tp}  FP {fp}  FN {fn}  TN {tn}  unlabelled {skipped}")
     print(
         f"known: precision {tp / max(tp + fp, 1):.2f}, recall {tp / max(tp + fn, 1):.2f}"
     )
@@ -90,10 +115,19 @@ def main() -> None:
     load_dotenv()  # finds ../.env locally; does nothing in Docker, where env_file already set the vars
     parser = argparse.ArgumentParser(prog="pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("check-endpoint", help="verify key, models and one JSON call")
-    r = sub.add_parser("reset-demo", help="delete all events and 'I already know this' clicks (dry run unless --yes)")
+    ce = sub.add_parser("check-endpoint", help="verify key, models and one JSON call")
+    ce.add_argument(
+        "--model", help="probe this model instead (JSON mode, reasoning_effort values)"
+    )
+    r = sub.add_parser(
+        "reset-demo",
+        help="delete all events and 'I already know this' clicks (dry run unless --yes)",
+    )
     r.add_argument("--yes", action="store_true", help="really delete")
-    sub.add_parser("check-usage", help="show what quota data Token Factory reports (no tokens used)")
+    sub.add_parser(
+        "check-usage",
+        help="show what quota data Token Factory reports (no tokens used)",
+    )
     p = sub.add_parser("process", help="run the per-video pipeline on one video")
     p.add_argument("video", type=Path)
     p.add_argument("--title", required=True)
@@ -115,7 +149,9 @@ def main() -> None:
         with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
             counts = reset_sessions(conn, dry_run=not args.yes)
         verb = "deleted" if args.yes else "would delete (run again with --yes)"
-        print(f"{verb}: {counts['events']} events, {counts['known_clicks']} 'I already know this' clicks")
+        print(
+            f"{verb}: {counts['events']} events, {counts['known_clicks']} 'I already know this' clicks"
+        )
     if args.command == "check-usage":
         from pipeline.llm import rate_limits
 
@@ -125,15 +161,33 @@ def main() -> None:
             print("x-ratelimit headers:", q["limits"] or "none")
             u = q["usage"] if isinstance(q["usage"], dict) else {}
             print("GET /usage keys:", sorted(u))
-            for k in ("daily_cost_limit_usd", "daily_cost_used_usd", "daily_cost_remaining_usd", "daily_reset_at",
-                      "rpm_limit", "window_hours"):
+            for k in (
+                "daily_cost_limit_usd",
+                "daily_cost_used_usd",
+                "daily_cost_remaining_usd",
+                "daily_reset_at",
+                "rpm_limit",
+                "window_hours",
+            ):
                 print(f"  {k} = {u.get(k)}")
-            for k in ("today", "last_24_hours", "by_model", "by_source"):  # shapes only; ids are not printed
+            for k in (
+                "today",
+                "last_24_hours",
+                "by_source",
+            ):  # shapes only; ids are not printed
                 print(f"  {k}: {json.dumps(u.get(k))[:400]}")
+            for m in (
+                u.get("by_model") or []
+            ):  # one line per model: what Token Factory actually billed
+                print(
+                    f"  by_model {m.get('model')}: {m.get('requests')} req, {m.get('prompt_tokens')} in "
+                    f"({m.get('cached_tokens')} cached), {m.get('completion_tokens')} out, "
+                    f"input ${m.get('input_cost')}, output ${m.get('output_cost')}"
+                )
         else:
             print("reason:", q["reason"])
     if args.command == "check-endpoint":
-        sys.exit(check_endpoint())
+        sys.exit(check_endpoint(args.model))
     if args.command == "process":
         from pipeline.process import (
             process,

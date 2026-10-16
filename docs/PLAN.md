@@ -143,6 +143,18 @@ cost per experience, and who pays (ed-tech companies).
   - unused Vite demo files are still in frontend/
   - the novelty label question is still ambiguous
 
+## Progress (16 Oct)
+
+- Dashboard and AMD usage panel built (#1, #2); offline fallback, demo
+  mode and the reset command (#3, #5, #6).
+- Gemma: Google DeepMind joined with a Gemma prize. Gemma-4-31B-IT is on
+  Token Factory (it was missing for part of the day). Run head to head on
+  the novelty check, it matched MiMo's accuracy on the 20 labels
+  (precision 0.46 vs 0.50, recall 0.60 both; n is small), is 10-20x
+  faster (9-11 s vs 103-210 s per call) and about 4x cheaper, so
+  NOVELTY_MODEL=Gemma-4-31B-IT. Prize eligibility through Token Factory
+  is not confirmed; asking in the lablab Discord.
+
 ## Build order and done criteria
 
 ### Wed 14 Oct: foundation

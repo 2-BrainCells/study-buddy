@@ -22,6 +22,9 @@ RETRYABLE = {429, 502, 503}
 MAX_TRIES = 5
 MAX_CONCURRENT = 8
 MIN_GAP_S = 3.0  # 60 s / 20 requests
+# reasoning_effort per model: "none" unless a model rejects it (GLM-5.3-Flash returns 422 for "none").
+# Thinking must stay off or low, or it uses up max_tokens and the reply comes back empty.
+REASONING_EFFORT = {"GLM-5.3-Flash": "low"}
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,7 @@ class Settings:
     api_key: str
     llm_model: str
     vision_model: str
+    novelty_model: str | None = None  # optional: the novelty check's own model (e.g. Gemma)
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -40,6 +44,7 @@ class Settings:
             api_key=os.environ["RADEON_API_KEY"],
             llm_model=os.environ["LLM_MODEL"],
             vision_model=os.environ["VISION_MODEL"],
+            novelty_model=os.environ.get("NOVELTY_MODEL") or None,
         )
 
 
@@ -167,6 +172,10 @@ class TokenFactory:
             self._next_start = start + MIN_GAP_S
         time.sleep(start - now)
 
+    def list_models(self) -> list[str]:
+        """Model ids Token Factory serves right now."""
+        return [m.id for m in self._client.models.list().data]
+
     def check_models(self) -> list[str]:
         """Return served model ids; raise if LLM_MODEL or VISION_MODEL is missing."""
         ids = [m.id for m in self._client.models.list().data]
@@ -185,8 +194,15 @@ class TokenFactory:
         *,
         video_id: int | None = None,
         learner_id: int | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> T:
-        """Call the LLM in JSON mode (schema in the prompt) and return the Pydantic-validated reply."""
+        """Call the LLM in JSON mode (schema in the prompt) and return the Pydantic-validated reply.
+
+        `model` overrides LLM_MODEL for this call (e.g. NOVELTY_MODEL); stage_costs records the model used.
+        """
+        model = model or self.settings.llm_model
+        effort = reasoning_effort or REASONING_EFFORT.get(model, "none")
         # ponytail: Token Factory has JSON mode only (structured_outputs: false, probed 14 Oct), so the
         # schema goes in the prompt and Pydantic is the real check. Add one repair retry if real chunks fail.
         system = {
@@ -201,10 +217,10 @@ class TokenFactory:
             try:
                 with self._slots:
                     completion = self._client.chat.completions.create(
-                        model=self.settings.llm_model,
+                        model=model,
                         messages=[system, *messages],
                         response_format={"type": "json_object"},
-                        reasoning_effort="none",
+                        reasoning_effort=effort,
                         max_tokens=self.max_tokens,
                     )
                 break
@@ -220,7 +236,7 @@ class TokenFactory:
         self.cost_sink(
             StageCost(
                 stage=stage,
-                model=self.settings.llm_model,
+                model=model,
                 requests=attempt + 1,
                 input_tokens=usage.prompt_tokens if usage else 0,
                 output_tokens=usage.completion_tokens if usage else 0,

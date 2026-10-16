@@ -51,7 +51,11 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   Read RADEON_API_KEY, LLM_BASE_URL, LLM_MODEL and VISION_MODEL from env
   vars; never hard-code them. Check GET /v1/models at startup, because
   model names change.
-- LLM_MODEL is MiMo-V2.6-Flash. Token Factory supports JSON mode
+- LLM_MODEL is MiMo-V2.6-Flash. Optional NOVELTY_MODEL gives the novelty check
+  its own model: Gemma-4-31B-IT since 16 Oct (same accuracy on our 20 labels,
+  10-20x faster, about 4x cheaper; see DECISIONS.md #66). If that model fails
+  or disappears (Gemma vanished from Token Factory for part of 16 Oct), the
+  check falls back to LLM_MODEL, then to the offline path. Token Factory supports JSON mode
   (response_format json_object) but not json_schema (structured_outputs:
   false, checked 14 Oct). Put the schema in the system prompt and validate
   every reply with Pydantic.
@@ -87,7 +91,7 @@ Read it at the start of each build session.
 - Frontend dev server: npm run dev (from frontend/)
 - Frontend tests: npm test (from frontend/)
 - Novelty eval (from backend/): python -m pipeline eval-novelty --learner <id> --video <id> --labels ../data/notes/labels_a.csv
-- Check the model endpoint: python -m pipeline check-endpoint
+- Check the model endpoint: python -m pipeline check-endpoint (add --model <name> to probe one model)
 - Check what quota Token Factory reports (no tokens used): python -m pipeline check-usage
 - Reset sessions before a recording (dry run without --yes): python -m pipeline reset-demo --yes
 - Public deploy: set DEMO_MODE=1 (no new learners or notes, so strangers can't spend the
