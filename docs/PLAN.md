@@ -153,7 +153,16 @@ cost per experience, and who pays (ed-tech companies).
   (precision 0.46 vs 0.50, recall 0.60 both; n is small), is 10-20x
   faster (9-11 s vs 103-210 s per call) and about 4x cheaper, so
   NOVELTY_MODEL=Gemma-4-31B-IT. Prize eligibility through Token Factory
-  is not confirmed; asking in the lablab Discord.
+  is not confirmed; asking in the lablab Discord. (Later confirmed: it counts.)
+- Junk terms fixed: a prompt rule plus a re-run gave video 4 (21 terms, 42 quiz
+  Qs, no "colon equals"); video 3 deleted. Novelty eval on video 4: precision
+  0.50, recall 0.64 (n = 21); most disagreements are label definition (#74).
+- Deployed (#4 done): https://study-buddy-vb9b.onrender.com/ on Render Free
+  (Singapore) with Neon Postgres (Singapore), DEMO_MODE=1. One slim image
+  (frontend built in, demo clip baked in, no torch): 58 MiB RAM. Checked live:
+  health, plans for A and B, quiz, captions, video Range, dashboard, and the
+  live budget from GET /v1/usage. The first visit after 15 idle min takes
+  about 1 min to wake.
 
 ## Build order and done criteria
 
