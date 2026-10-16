@@ -1,8 +1,53 @@
-# Errors and decisions log (12–15 Oct 2026)
+# Errors and decisions log (12–16 Oct 2026)
 
 This log lists every error we hit and every design decision we made while building Study Buddy. Each entry
 gives its cause, how it was resolved, and the commit that holds the fix. Numbers come from runs in this
 repo; small samples are marked as such.
+
+## Handoff summary (Fri 16 Oct, 9 AM IST; everything up to `d71b0cf` is pushed)
+
+**Built and working:**
+- **Per-video pipeline (CPU plus Token Factory):** Whisper transcription, term extraction, pauses at sentence ends, the near-duplicate filter, explanations and quiz questions, all cached in Postgres. The 16-minute lecture 2 clip is video 3: 20 terms, 40 quiz questions.
+- **Learner side:**
+  - the questionnaire and typed notes build a profile
+  - the novelty check runs on Gemma, falling back to MiMo, then to offline
+  - the plan API, plus `eval-novelty` against your labels
+- **Player:**
+  - study and glance modes, with 5 pauses per video, ranked by how often the transcript mentions each term
+  - "I already know this", captions, the session and skipped lists, and the quiz
+  - events are logged
+- **Dashboard:** "where learners struggle", plus the AMD usage panel (cost per lecture hour and per learner, and the budget from `GET /v1/usage`).
+- **Safety:** demo mode (`DEMO_MODE=1`), the offline fallback, and `reset-demo`.
+- **Tests:** 41 backend and 8 frontend. The design critic passed the player and the dashboard.
+
+**Known bugs and rough edges:**
+- Junk terms still pause: "colon equals" for learner A (#23).
+- Novelty accuracy is modest: precision about 0.5, recall 0.6, from n = 20, one learner (#28, #66).
+- The dashboard has almost no real data yet (2 events).
+- The Docker image hasn't been rebuilt since the CPU-only torch change, and FastAPI doesn't serve `frontend/dist` yet.
+- The repair retry (#4) has never fired live.
+- Unused Vite demo files are still in `frontend/`.
+- Your local API on port 8001 needs restarting.
+- Your `.env.example` edit isn't committed yet.
+
+**Key decisions and why** (details in the rows below):
+- **Models:** MiMo-V2.6-Flash for extraction, notes and quizzes; Gemma-4-31B-IT for the novelty check, because it matched MiMo's accuracy and was 10–20× faster and about 4× cheaper (#66).
+- **Output format:** JSON mode with Pydantic validation, because Token Factory has no `json_schema` (#1).
+- **Thresholds:**
+  - duplicate terms at BGE-M3 ≥ 0.90 (#21)
+  - similarity bands dropped, because they were near chance (#27)
+  - 5 pauses per video, ranked by mentions (#35)
+- **Batching:** one LLM call per ~600-word chunk, and one novelty call per learner per video, run in the background (#19, #30).
+- **Schema:**
+  - `videos.file` added
+  - `learner_terms.source` records where a known term came from: questionnaire, notes, or a click
+  - API routes moved under `/api`
+- **Frontend:** Vite rather than Next.js, no web container, no chart library (#40, #60).
+
+**Left from PLAN.md** (sizes and order in the plan file `what-s-left-in-the-cozy-sunrise.md`):
+- **Must do:** the Docker image and deploy (pick a host), recording the demo, the README with the CS229 credit, the slides, and submitting by 11:30 AM Sunday.
+- **Should do:** the friend test (a small pilot), Whisper WER against the SEE transcript, deciding on junk terms, and asking in the Discord whether Gemma via Token Factory counts for the prize.
+- **Could do:** handwritten notes, and full-length lectures.
 
 **Type:**
 - **Error:** something broke or gave wrong results.
