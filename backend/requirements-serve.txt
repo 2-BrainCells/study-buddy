@@ -1,0 +1,9 @@
+# Serving only: the deployed app runs with DEMO_MODE=1 and cached data, so it never loads
+# torch, faster-whisper or BGE-M3 (those imports are lazy). requirements.txt is the full
+# pipeline set. Pinned to the versions the test suite passed on (16 Oct).
+fastapi==0.143.0
+uvicorn==0.54.0
+psycopg[binary]==3.3.6
+openai==3.29.0
+pydantic==2.14.1
+httpx==0.28.1

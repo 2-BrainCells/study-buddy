@@ -1,6 +1,6 @@
 services:
   app: 
-    build: ./backend
+    build: .  # root Dockerfile: frontend build + slim backend
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/studybuddy

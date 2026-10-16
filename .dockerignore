@@ -1,0 +1,12 @@
+# Allowlist: send only what the image needs (keeps .env and the other lectures out)
+**
+!backend/
+!frontend/
+!data/videos/vlc-record-2026-10-11-12h12m18s-CS229-lecture02.mp4-.mp4
+backend/tests
+backend/.claude
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache

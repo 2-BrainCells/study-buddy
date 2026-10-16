@@ -7,6 +7,7 @@ import openai
 import psycopg
 from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pipeline.llm import Settings, TokenFactory, db_cost_sink
 from pipeline.transcribe import to_vtt
 from pydantic import BaseModel
@@ -22,6 +23,7 @@ from app.learner import (
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 VIDEO_DIR = Path(os.environ.get("VIDEO_DIR", "../data/videos"))
+FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", "../frontend/dist"))
 
 app = FastAPI(title="Study Buddy")
 api = APIRouter(prefix="/api")
@@ -263,4 +265,13 @@ def get_dashboard(video_id: int) -> dict:
         return insights.dashboard(conn, video_id)
 
 
+def mount_frontend(target: FastAPI, dist: Path) -> bool:
+    """Serve the built React app at / if it exists; dev and tests run without it. Returns whether it mounted."""
+    if not (dist / "index.html").exists():
+        return False
+    target.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
+    return True
+
+
 app.include_router(api)  # last: it copies the routes that exist at this point
+mount_frontend(app, FRONTEND_DIST)  # after the API: a mount at / matches every path
