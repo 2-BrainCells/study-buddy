@@ -56,7 +56,7 @@ Measured on the demo clip. Small samples are marked as such; details are in [doc
 | What | Value |
 |---|---|
 | LLM cost per lecture hour (list price) | about **$0.008** |
-| Novelty check per learner per video (Gemma) | about $0.00008, 7.6 s |
+| Novelty check per learner per video (Gemma) | about $0.00009, 9 s (average of 4 calls) |
 | Whisper small.en on CPU | about 24 s per lecture minute |
 | Pause delay after a term's first mention | median 1.5 s |
 | Novelty check vs hand labels ("known") | precision 0.50, recall 0.64; **n = 21 terms, one learner**. Most disagreements are about what the label means, not model errors ([#74](docs/DECISIONS.md)) |
