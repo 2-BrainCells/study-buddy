@@ -1,5 +1,7 @@
 # Study Buddy
 
+[![CI](https://github.com/2-BrainCells/study-buddy/actions/workflows/ci.yml/badge.svg)](https://github.com/2-BrainCells/study-buddy/actions/workflows/ci.yml)
+
 An AI study buddy for lecture videos. It pauses the lecture at the end of a sentence to explain a term **this learner** doesn't know yet, based on their own notes, then quizzes them at the end.
 
 **Live demo:** https://study-buddy-vb9b.onrender.com/
@@ -101,7 +103,9 @@ The live demo runs one Docker image on Render (free tier, Singapore), with Neon 
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q   # 43 tests; models are always faked
+cd backend && python -m pytest -q   # 53 tests; models are always faked
+# the 10 endpoint tests need a separate Postgres database (they empty it); without one they're skipped:
+# TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/study_buddy_test, after running backend/db/init.sql on it
 cd frontend && npm test             # 8 tests
 python -m ruff check backend
 ```
