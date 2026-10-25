@@ -140,8 +140,11 @@ def usage(conn, quota: dict) -> dict:
 
     per_learner: dict[int, dict] = {}
     for lid, name, model, req, tin, tout in conn.execute(
-        "SELECT s.learner_id, l.name, s.model, sum(s.requests), sum(s.input_tokens), sum(s.output_tokens)"
-        " FROM stage_costs s JOIN learners l ON l.id = s.learner_id GROUP BY s.learner_id, l.name, s.model"
+        # real learners show as 'Learner 7': the usage panel is public, their names aren't
+        "SELECT s.learner_id, CASE WHEN l.token_hash IS NULL THEN l.name ELSE 'Learner ' || l.id END,"
+        " s.model, sum(s.requests), sum(s.input_tokens), sum(s.output_tokens)"
+        # grouped by the primary key l.id, so Postgres allows any learners column (name, token_hash) above
+        " FROM stage_costs s JOIN learners l ON l.id = s.learner_id GROUP BY s.learner_id, l.id, s.model"
     ):
         row = per_learner.setdefault(
             lid,

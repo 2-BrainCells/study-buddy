@@ -41,7 +41,8 @@ CREATE TABLE learners (
     id            serial PRIMARY KEY,
     name          text NOT NULL,
     questionnaire jsonb,
-    level         text
+    level         text,
+    token_hash    text                  -- sha256 of the learner's token; NULL = public demo learner
 );
 
 CREATE TABLE notes (

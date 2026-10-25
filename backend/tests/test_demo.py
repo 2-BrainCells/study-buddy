@@ -12,16 +12,23 @@ client = TestClient(app)
 LEARNER = {"name": "x", "answers": dict.fromkeys(["calculus", "linear_algebra", "probability", "ml_basics", "python"], False)}
 
 
-def test_demo_mode_blocks_new_learners_and_notes(monkeypatch):
+def test_demo_mode_blocks_new_learners(monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "1")
-    assert client.get("/api/config").json() == {"demo": True}
+    monkeypatch.delenv("INVITE_CODE", raising=False)
+    assert client.get("/api/config").json() == {"demo": True, "invite": False}
     assert client.post("/api/learners", json=LEARNER).status_code == 403
-    assert client.post("/api/learners/2/notes", json={"text": "notes"}).status_code == 403
+    # notes now depend on who the learner is (demo or real), so that check needs the database: see test_api.py
 
 
 def test_config_reports_demo_off_by_default(monkeypatch):
     monkeypatch.delenv("DEMO_MODE", raising=False)
-    assert client.get("/api/config").json() == {"demo": False}
+    monkeypatch.delenv("INVITE_CODE", raising=False)
+    assert client.get("/api/config").json() == {"demo": False, "invite": False}
+
+
+def test_config_reports_invites(monkeypatch):
+    monkeypatch.setenv("INVITE_CODE", "letmein")
+    assert client.get("/api/config").json()["invite"] is True  # never the code itself
 
 
 class FakeConn:

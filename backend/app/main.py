@@ -1,11 +1,13 @@
+import hashlib
 import os
+import secrets
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 import openai
 import psycopg
-from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Header, HTTPException, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pipeline.llm import Settings, TokenFactory, db_cost_sink
@@ -50,6 +52,7 @@ def token_factory() -> TokenFactory:
 class NewLearner(BaseModel):
     name: str
     answers: Questionnaire
+    invite: str = ""
 
 
 class Notes(BaseModel):
@@ -75,12 +78,15 @@ class Event(BaseModel):
 
 @api.get("/learners")
 def list_learners() -> list[dict]:
-    """Learners with their questionnaire answers and how many terms their notes added (for the profile strip)."""
+    """Demo learners with their questionnaire answers and how many terms their notes added (for the profile strip).
+
+    Real learners are private: their browser keeps their own details, so they're never listed here.
+    """
     with psycopg.connect(DATABASE_URL) as conn:
         rows = conn.execute(
             "SELECT l.id, l.name, l.questionnaire,"
             " (SELECT count(*) FROM learner_terms lt WHERE lt.learner_id = l.id AND lt.source = 'notes')"
-            " FROM learners l ORDER BY l.id"
+            " FROM learners l WHERE l.token_hash IS NULL ORDER BY l.id"
         ).fetchall()
     return [
         {"id": i, "name": n, "questionnaire": q or {}, "note_terms": c}
@@ -91,6 +97,37 @@ def list_learners() -> list[dict]:
 def demo_mode() -> bool:
     """DEMO_MODE=1 on the public deploy: no new learners or notes, so strangers can't spend the model budget."""
     return os.environ.get("DEMO_MODE", "") == "1"
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 of a learner token. Only the hash is stored, so a leaked database can't be used to log in."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def token_matches(given: str | None, stored_hash: str) -> bool:
+    """Whether the token a browser sent belongs to this learner. Timing-safe."""
+    if not given:
+        return False
+    return secrets.compare_digest(hash_token(given), stored_hash)
+
+
+def require_learner(learner_id: int, authorization: str | None) -> bool:
+    """Allow a request on behalf of this learner, or raise 404/401. Returns True for a real (token) learner.
+
+    Demo learners have no token_hash, so anyone may use them; everyone else must send
+    "Authorization: Bearer <their token>".
+    """
+    # ponytail: one extra query per request; fold it into the endpoint's own connection if latency matters
+    with psycopg.connect(DATABASE_URL) as conn:
+        row = conn.execute("SELECT token_hash FROM learners WHERE id = %s", (learner_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "learner not found")
+    if row[0] is None:
+        return False
+    given = authorization.removeprefix("Bearer ") if authorization else None
+    if not token_matches(given, row[0]):
+        raise HTTPException(401, "This learner's token is missing or wrong.")
+    return True
 
 
 def require_not_demo() -> None:
@@ -108,18 +145,31 @@ def optional_token_factory() -> TokenFactory | None:
 
 @api.get("/config")
 def get_config() -> dict:
-    """What the frontend needs to know about this deployment."""
-    return {"demo": demo_mode()}
+    """What the frontend needs to know about this deployment: demo mode, and whether sign-up takes an invite code."""
+    return {"demo": demo_mode(), "invite": bool(os.environ.get("INVITE_CODE"))}
+
+
+def require_invite(given: str) -> None:
+    """With INVITE_CODE set, sign-up needs it (this is how classmates get in on the public demo).
+    Without it, demo mode decides."""
+    code = os.environ.get("INVITE_CODE")
+    if not code:
+        require_not_demo()
+        return
+    # bytes, not str: compare_digest raises TypeError on non-ASCII text (e.g. a typed "café")
+    if not secrets.compare_digest(given.encode(), code.encode()):
+        raise HTTPException(403, "That invite code isn't right.")
 
 
 @api.post("/learners")
 def create_learner(body: NewLearner) -> dict:
     """Create a learner and seed the profile from the questionnaire."""
-    require_not_demo()
+    require_invite(body.invite)
+    token = secrets.token_urlsafe(32)  # returned once, below; only its hash is stored
     with psycopg.connect(DATABASE_URL) as conn:
         learner_id = conn.execute(
-            "INSERT INTO learners (name, questionnaire) VALUES (%s, %s) RETURNING id",
-            (body.name, body.answers.model_dump_json()),
+            "INSERT INTO learners (name, questionnaire, token_hash) VALUES (%s, %s, %s) RETURNING id",
+            (body.name, body.answers.model_dump_json(), hash_token(token)),
         ).fetchone()[0]
         seeds = [
             t
@@ -128,7 +178,7 @@ def create_learner(body: NewLearner) -> dict:
             for t in SEED_TERMS[topic]
         ]
         seeded = add_known_terms(conn, learner_id, seeds, "questionnaire")
-    return {"learner_id": learner_id, "seeded_terms": seeded}
+    return {"learner_id": learner_id, "seeded_terms": seeded, "token": token}
 
 
 def warm_plans(learner_id: int) -> None:
@@ -149,9 +199,10 @@ def warm_plans(learner_id: int) -> None:
 
 
 @api.post("/learners/{learner_id}/notes")
-def add_notes(learner_id: int, body: Notes, background: BackgroundTasks) -> dict:
+def add_notes(learner_id: int, body: Notes, background: BackgroundTasks, authorization: str | None = Header(None)) -> dict:
     """Index typed notes into the learner's profile, then precompute their video plans in the background."""
-    require_not_demo()
+    if not require_learner(learner_id, authorization):
+        require_not_demo()  # demo learners are shared, so the public demo keeps them read-only
     tf = optional_token_factory()
     if tf is None:
         raise HTTPException(503, "Reading notes needs the model, which isn't configured.")
@@ -165,15 +216,17 @@ def add_notes(learner_id: int, body: Notes, background: BackgroundTasks) -> dict
 
 
 @api.get("/learners/{learner_id}/videos/{video_id}/plan")
-def get_plan(learner_id: int, video_id: int) -> list[dict]:
+def get_plan(learner_id: int, video_id: int, authorization: str | None = Header(None)) -> list[dict]:
     """This learner's pause plan for one video."""
+    require_learner(learner_id, authorization)
     with psycopg.connect(DATABASE_URL) as conn:
         return video_plan(conn, optional_token_factory(), learner_id, video_id)
 
 
 @api.post("/learners/{learner_id}/known")
-def mark_known(learner_id: int, body: Known) -> dict:
+def mark_known(learner_id: int, body: Known, authorization: str | None = Header(None)) -> dict:
     """'I already know this': the term becomes known for this learner, and the click is logged."""
+    require_learner(learner_id, authorization)
     with psycopg.connect(DATABASE_URL) as conn:
         cur = conn.execute(
             "INSERT INTO learner_terms (learner_id, term_text, embedding, status, source)"
@@ -191,7 +244,8 @@ def mark_known(learner_id: int, body: Known) -> dict:
 
 
 @api.post("/events")
-def log_event(e: Event) -> dict:
+def log_event(e: Event, authorization: str | None = Header(None)) -> dict:
+    require_learner(e.learner_id, authorization)  # events feed the case study, so nobody can fake another's
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute(
             "INSERT INTO events (learner_id, video_id, type, term_id, correct, ts) VALUES (%s, %s, %s, %s, %s, %s)",
