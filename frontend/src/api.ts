@@ -39,28 +39,75 @@ export type Dashboard = {
   learners: number; sessions: number; pauses: number; quiz_answered: number; quiz_correct: number; terms: DashTerm[]
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`/api${path}`, { headers: { "Content-Type": "application/json" }, ...init })
-  if (!r.ok) throw new Error(`${init?.method ?? "GET"} ${path}: ${r.status} ${await r.text()}`)
+// Real learners are private: the server returns their token once and keeps only its hash,
+// so this browser is the only place that can act as them. Demo learners have no token.
+export type MyLearner = Learner & { token: string }
+const MINE_KEY = "study-buddy.my-learners"
+
+function readMine(): MyLearner[] {
+  try {
+    return JSON.parse(localStorage.getItem(MINE_KEY) ?? "[]")
+  } catch {
+    return []
+  }
+}
+let mine = readMine()
+export const myLearners = () => mine
+
+function remember(l: MyLearner) {
+  mine = [...mine.filter((m) => m.id !== l.id), l]
+  try {
+    localStorage.setItem(MINE_KEY, JSON.stringify(mine))
+  } catch {
+    // ponytail: storage blocked (private window): the learner lasts until this tab closes
+  }
+}
+
+function auth(lid?: number): Record<string, string> {
+  const token = mine.find((m) => m.id === lid)?.token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function req<T>(path: string, init?: RequestInit, lid?: number): Promise<T> {
+  const r = await fetch(`/api${path}`, { ...init, headers: { "Content-Type": "application/json", ...auth(lid) } })
+  if (!r.ok) {
+    const text = await r.text()
+    let detail = text
+    try {
+      detail = JSON.parse(text).detail ?? text // FastAPI errors look like {"detail": "..."}
+    } catch {
+      // not JSON: show the raw text
+    }
+    throw new Error(`${detail} (${init?.method ?? "GET"} ${path}: ${r.status})`)
+  }
   return r.json()
 }
-const post = <T,>(path: string, body: unknown) => req<T>(path, { method: "POST", body: JSON.stringify(body) })
+const post = <T,>(path: string, body: unknown, lid?: number) =>
+  req<T>(path, { method: "POST", body: JSON.stringify(body) }, lid)
 
 export const api = {
   learners: () => req<Learner[]>("/learners"),
   videos: () => req<Video[]>("/videos"),
-  createLearner: (name: string, answers: Record<string, boolean>) =>
-    post<{ learner_id: number; seeded_terms: number }>("/learners", { name, answers }),
-  addNotes: (id: number, text: string) => post<{ terms_added: number }>(`/learners/${id}/notes`, { text }),
-  plan: (lid: number, vid: number) => req<PlanItem[]>(`/learners/${lid}/videos/${vid}/plan`),
+  async createLearner(name: string, answers: Record<string, boolean>, invite: string) {
+    const r = await post<{ learner_id: number; seeded_terms: number; token: string }>("/learners", { name, answers, invite })
+    remember({ id: r.learner_id, name, questionnaire: answers, note_terms: 0, token: r.token })
+    return r
+  },
+  async addNotes(id: number, text: string) {
+    const r = await post<{ terms_added: number }>(`/learners/${id}/notes`, { text }, id)
+    const me = mine.find((m) => m.id === id)
+    if (me) remember({ ...me, note_terms: me.note_terms + r.terms_added })
+    return r
+  },
+  plan: (lid: number, vid: number) => req<PlanItem[]>(`/learners/${lid}/videos/${vid}/plan`, undefined, lid),
   quiz: (vid: number) => req<Question[]>(`/videos/${vid}/quiz`),
   known: (lid: number, video_id: number, term_id: number, ts: number) =>
-    post(`/learners/${lid}/known`, { video_id, term_id, ts }),
-  config: () => req<{ demo: boolean }>("/config"),
+    post(`/learners/${lid}/known`, { video_id, term_id, ts }, lid),
+  config: () => req<{ demo: boolean; invite: boolean }>("/config"),
   usage: () => req<Usage>("/usage"),
   dashboard: (vid: number) => req<Dashboard>(`/dashboard/videos/${vid}`),
   event: (e: { learner_id: number; video_id: number; type: EventType; term_id?: number; correct?: boolean; ts?: number }) =>
-    post("/events", e),
+    post("/events", e, e.learner_id),
 }
 export const mediaUrl = (vid: number) => `/api/videos/${vid}/media`
 export const captionsUrl = (vid: number) => `/api/videos/${vid}/captions.vtt`

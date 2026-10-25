@@ -100,13 +100,20 @@ A full 76-minute lecture is untested: the chunk calls run one after another, so 
 
 The live demo runs one Docker image on Render (free tier, Singapore), with Neon Postgres. The image holds the built frontend and the demo clip, and no torch. `DEMO_MODE=1` blocks new learners and notes, so visitors can't spend the model budget; it runs in about 60 MB of RAM. How we chose the host and set it up is in [DECISIONS #71–76](docs/DECISIONS.md).
 
+## Access
+
+- **Demo learners** (A and B) are open to everyone: no sign-up, no login.
+- **Real learners** sign up with an invite code (`INVITE_CODE`; with it set, sign-up works even in demo mode). The server returns a random token once and stores only its SHA-256 hash. The browser keeps the token and sends it as `Authorization: Bearer …`; without the right token, a real learner's plan, clicks, notes and events return 401.
+- **Nobody sees real learners' names:** `/api/learners` lists demo learners only, and the public usage panel shows real learners as "Learner 7". The dashboard has only aggregates.
+- Why it's built this way: [DECISIONS #81–83](docs/DECISIONS.md).
+
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q   # 53 tests; models are always faked
-# the 10 endpoint tests need a separate Postgres database (they empty it); without one they're skipped:
+cd backend && python -m pytest -q   # 65 tests; models are always faked
+# the 18 database tests need a separate Postgres database (they empty it); without one they're skipped:
 # TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/study_buddy_test, after running backend/db/init.sql on it
-cd frontend && npm test             # 8 tests
+cd frontend && npm test             # 10 tests
 python -m ruff check backend
 ```
 

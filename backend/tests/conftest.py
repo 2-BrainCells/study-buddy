@@ -33,6 +33,9 @@ def db(monkeypatch):
     monkeypatch.setattr("app.main.optional_token_factory", lambda: None)
     # nor its quota endpoint: main.py calls insights.cached_quota() through the module, so patch it there
     monkeypatch.setattr("app.insights.cached_quota", lambda: FAKE_QUOTA)
+    # tests decide these themselves; never inherit them from the developer's shell
+    monkeypatch.delenv("INVITE_CODE", raising=False)
+    monkeypatch.delenv("DEMO_MODE", raising=False)
 
     with psycopg.connect(TEST_DB, autocommit=True) as conn:
         conn.execute("TRUNCATE videos, learners RESTART IDENTITY CASCADE")
