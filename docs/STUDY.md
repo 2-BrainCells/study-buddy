@@ -115,7 +115,7 @@ The same steps, sent as one message: the link, the invite code, the consent text
 2. Before today, how familiar were you with gradient descent? (1 = never heard of it … 5 = could teach it)
 3. "The video paused on terms I didn't know." (1 = strongly disagree … 5 = strongly agree)
 4. The number of pauses felt: too few / about right / too many.
-5. Under the video, "Skipped" lists terms the app thought you knew. **Were any of them actually unfamiliar? Which ones?**
+5. The quiz page lists "terms skipped because you seem to know them". **Were any of them actually unfamiliar? Which ones?**
 6. Did a pause ever come at a bad moment, or feel unnecessary? Which one, and why?
 7. "I'd use this for my own lectures." (1–5), and why?
 8. Anything confusing or broken?
@@ -144,3 +144,5 @@ change log below, without the name.
 | Date | Change | Why |
 |---|---|---|
 | 25 Oct 2026 | First version | Written before the pilot |
+| 27 Oct 2026 | Hypotheses (section 3) written by Abhinav | Before the pilot and any participant data |
+| 27 Oct 2026 | The quiz page now lists the skipped terms, shows the learner number and links the survey (https://forms.gle/F1DNbTogv5jdKUhS9); Q5 reworded to point there | The skipped list was only on the player page, which participants have left by the time they answer Q5, so false skips would have relied on memory. No participant data existed yet |
