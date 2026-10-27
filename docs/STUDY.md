@@ -1,0 +1,146 @@
+# User study: does Study Buddy pause on the right terms?
+
+Written before any data is collected (25 Oct 2026). Changes made after the first real session are listed at
+the bottom, with the date and the reason, so it's clear what was planned and what was adjusted.
+
+## 1. Question
+
+**Main (A):** Does Study Buddy pause on terms this learner doesn't know, and skip the ones they do?
+**Supporting (C):** How does the experience feel: are the pauses helpful or disruptive, and would people use it?
+
+Quiz scores are reported descriptively only. Without a baseline, a right answer can't show that someone
+*learned* the term, so this study makes no learning claims.
+
+## 2. Metrics
+
+Every metric is computed from data the app already stores (`events`, `learner_terms`) or from the survey,
+so anyone with the data can recompute it. The exact SQL goes in `docs/STUDY_ANALYSIS.sql` (piece 3.5).
+
+| Metric | Definition | Source |
+|---|---|---|
+| Pauses | distinct terms with a `pause` event for this learner (study mode). `glance` events are counted separately | `events` |
+| **False-pause rate** | paused terms the learner also marked "I already know this" (`known` event) ÷ pauses | `events` |
+| Skipped terms | video terms already in the learner's profile **before** the session (`learner_terms.source` = `questionnaire` or `notes`, status `known`). Rows with `source = 'video'` come from clicks during the session and are excluded | `learner_terms` |
+| **False skips** | skipped terms the learner says they didn't know (survey Q5), plus wrong quiz answers on skipped terms (the quiz only includes skipped terms when the learner has fewer than 5 new ones) | survey + `events` |
+| Saved for the end | new terms beyond the 5-pause cap (shown after the video, not paused) | reconstructed from the plan |
+| Quiz accuracy | correct ÷ answered, descriptive only | `events` |
+| Completion | signed up → at least one pause → at least one quiz answer | `learners`, `events` |
+| Experience | survey ratings (Q3, Q4, Q7) and free-text answers | survey |
+
+Each metric is reported per learner and overall, split by whether the learner added notes, with n always shown.
+Rates are given as counts too ("4 of 23"), never as a bare percentage.
+
+## 3. Hypotheses
+
+Written by Abhinav on 27 Oct 2026, before the pilot and before any participant data.
+
+- **H1.** About **4 in 10 pauses** will be on terms the learner already knew (false-pause rate ≈ 40%).
+  *Reasoning:* the system tells clearly different terms apart, but not very similar ones (e.g.
+  "gradient descent" and "gradient"), so it will pause on terms the learner effectively already knows.
+- **H1b (mechanism).** Most false pauses will be on a term that has a near-twin in this clip's term list
+  (see the check below), e.g. a pause on "gradient descent algorithm" for a learner who knows "gradient descent".
+  If this holds, the fix is to merge near-twins; if not, false pauses have another cause.
+- **H2.** Learners who add notes will get **more** false pauses than learners who don't (direction only).
+  *Reasoning:* the system may pause on two very similar terms.
+  *Caveat:* people who add notes probably know more ML, so they have more known terms that could be
+  paused on. A difference could come from prior knowledge, not the notes. Where possible, compare
+  learners at the same familiarity level (survey Q2). With about 3 people per group, H2 is reported as an
+  observation, not a conclusion.
+- **H3.** About **2 false skips per learner**: skipped terms the learner didn't actually know.
+- **It fails if** more than **4 in 10 pauses** are on terms the learner already knew. *Why 4:* that many
+  pointless pauses is tolerable in one session, but not something I'd keep coming back to.
+- **Precision:** with about 30 pauses in total, a measured rate is uncertain by roughly ±18 points
+  (1.96 × √(0.4 × 0.6 / 30)), more since pauses from one learner aren't independent. A result within about
+  15 points of 40% counts as **inconclusive**. Results are reported as counts with a range, never as a bare
+  percentage.
+
+*Checked 27 Oct against the demo clip's 21 terms (live site):* "gradient descent" and "gradient descent
+algorithm" are both separate terms, and other near-pairs exist (local minimum / local optimum / global
+minimum, initial point / initialization, steepest descent / gradient descent). The profile matches terms
+by exact text (`classify` in `backend/app/learner.py`), so knowing one of a pair doesn't mark the other as
+known.
+
+## 4. Participants
+
+- **Target:** 6–10 people, recruited from classmates and friends.
+- **A deliberate mix of prior knowledge**, because the clip is CS229 gradient descent and people who
+  know ML well may get no pauses at all:
+  - about a third new to ML
+  - about a third who know some
+  - about a third who know it well
+- Recorded per person: the onboarding questionnaire (already in the app), whether they added notes, and
+  observed or on their own.
+- **Known bias:** not a random sample, and participants know the author, so ratings will lean positive.
+  Concrete complaints and observed behaviour count for more than scores.
+
+## 5. Protocol
+
+**Before anyone:** a pilot. First the author goes through the full flow, then one friend. Fix what breaks,
+and log the changes at the bottom of this file.
+
+**Spread sessions over 2–3 days.** Notes indexing and the novelty check use the model: the daily budget is
+$1, and the limit is 20 requests/min. The novelty check takes 100–210 s after notes are added.
+
+### Observed sessions (2–3 people, about 30 min, in person or screen-share)
+
+1. Consent (section 6), out loud; they say yes.
+2. They sign up on the live site with the invite code, using a nickname if they like, and answer the questionnaire.
+3. **Optional:** they paste their own study notes on the topic, then wait about 4 minutes before starting, so the plan includes the notes check.
+4. They watch in **Study** mode and think aloud. *The author stays quiet and takes notes:* where they
+   hesitate, what they say at each pause, whether they click "I already know this", anything confusing.
+   No help unless they're stuck for more than a minute (and if so, note it).
+5. Quiz, then the survey (section 7).
+6. Two questions from the author: "Was there a pause you didn't need?" and "Was there a term you wish it had stopped for?"
+
+### On their own (the rest)
+
+The same steps, sent as one message: the link, the invite code, the consent text, "use Study mode",
+"if you add notes, wait about 4 minutes before pressing play", and "the survey link is on the quiz page".
+
+## 6. Consent (shown before sign-up; observed participants hear it out loud)
+
+> Study Buddy is a student project. If you take part:
+> - The app records which terms it paused on, your "I already know this" clicks, and your quiz answers.
+>   You'll also fill in a short survey.
+> - **If you paste notes, they are sent to AMD's model service to find the terms they cover, and the
+>   service keeps prompts for about 2 days.** Paste only study notes, never anything personal.
+> - Use a nickname if you like. Your name is never shown publicly.
+> - Results are reported anonymously and in aggregate. Quotes are used only if you say yes in the survey.
+> - You can stop at any time, and ask for your data to be deleted. Deleting your learner removes your
+>   notes, profile and events.
+
+## 7. Survey (Tally or Google Forms, linked from the quiz page)
+
+1. Your learner number (shown on the quiz page).
+2. Before today, how familiar were you with gradient descent? (1 = never heard of it … 5 = could teach it)
+3. "The video paused on terms I didn't know." (1 = strongly disagree … 5 = strongly agree)
+4. The number of pauses felt: too few / about right / too many.
+5. Under the video, "Skipped" lists terms the app thought you knew. **Were any of them actually unfamiliar? Which ones?**
+6. Did a pause ever come at a bad moment, or feel unnecessary? Which one, and why?
+7. "I'd use this for my own lectures." (1–5), and why?
+8. Anything confusing or broken?
+9. May I quote your answers anonymously? (yes / no)
+
+## 8. Limitations (written in advance)
+
+- One 16-minute clip on one topic; the results may not hold for other lectures.
+- 6–10 participants, not randomly chosen, who know the author: there's no statistical significance, and
+  every number is a description of this group.
+- "I already know this" is a proxy for "didn't need this pause". Some people may click it to dismiss a
+  card, and some may not bother to click.
+- False skips rely mostly on self-report.
+- No control condition (for example, pausing on every term), so the study can't say Study Buddy beats an
+  alternative, only how well it matched these learners.
+- The "saved for the end" cap (5 pauses) means some new terms are never paused, by design.
+
+## 9. Deleting a participant's data
+
+On Neon: `DELETE FROM learners WHERE id = <learner number>;`. Notes, profile terms and events are removed by
+`ON DELETE CASCADE`. Cost rows stay, without the learner (`ON DELETE SET NULL`). Note the deletion in the
+change log below, without the name.
+
+## Change log
+
+| Date | Change | Why |
+|---|---|---|
+| 25 Oct 2026 | First version | Written before the pilot |
