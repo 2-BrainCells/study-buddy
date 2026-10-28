@@ -14,11 +14,6 @@ os.environ["DATABASE_URL"] = TEST_DB or "postgresql://unused@localhost:1/none"
 FAKE_QUOTA = {"available": False, "reason": "faked in tests"}
 
 
-def fake_embed(texts: list[str]) -> list[list[float]]:
-    """Stand-in for BGE-M3: one 1024-dim vector per text. Not all zeros, since cosine of a zero vector is NaN."""
-    return [[1.0] * 1024 for _ in texts]
-
-
 @pytest.fixture
 def db(monkeypatch):
     """Empty the test database, seed one lecture and one learner, and return the ids made."""
@@ -27,8 +22,8 @@ def db(monkeypatch):
             pytest.fail("TEST_DATABASE_URL must be set in CI")
         pytest.skip("set TEST_DATABASE_URL to run database tests")
 
-    # patch where it's used: learner.py imported embed by name, so swap app.learner's copy
-    monkeypatch.setattr("app.learner.embed", fake_embed)
+    # BGE-M3 is deliberately not faked: the API must never load it (the 512 MB host can't), and CI
+    # installs only the serving packages, so any API path that calls embed() fails here (DECISIONS #84)
     # no Token Factory either: every endpoint takes its offline path
     monkeypatch.setattr("app.main.optional_token_factory", lambda: None)
     # nor its quota endpoint: main.py calls insights.cached_quota() through the module, so patch it there

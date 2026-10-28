@@ -4,7 +4,6 @@ import logging
 
 import openai
 import pydantic
-from pipeline.embed import embed, to_vector
 from pipeline.llm import EmptyReplyError, TokenFactory
 from pydantic import BaseModel, ConfigDict
 
@@ -156,16 +155,19 @@ def classify(
 
 
 def add_known_terms(conn, learner_id: int, terms: list[str], source: str) -> int:
-    """Embed terms and add them to the profile as known; existing entries win. Returns rows added."""
+    """Add terms to the profile as known; existing entries win. Returns rows added."""
+    # ponytail: no embedding (NULL). Plans match by exact text (classify), so it only fed the eval's
+    # nearest/sim, and BGE-M3 (~2.5 GB RAM) can't run on the 512 MB host. Similarity matching
+    # (e.g. merging near-twins, docs/STUDY.md H1b) would need it back, and a bigger host.
     terms = sorted({t.strip().lower() for t in terms if t.strip()})
     if not terms:
         return 0
     added = 0
-    for term, vec in zip(terms, embed(terms)):
+    for term in terms:
         cur = conn.execute(
-            "INSERT INTO learner_terms (learner_id, term_text, embedding, status, source)"
-            " VALUES (%s, %s, %s::vector, 'known', %s) ON CONFLICT (learner_id, term_text) DO NOTHING",
-            (learner_id, term, to_vector(vec), source),
+            "INSERT INTO learner_terms (learner_id, term_text, status, source)"
+            " VALUES (%s, %s, 'known', %s) ON CONFLICT (learner_id, term_text) DO NOTHING",
+            (learner_id, term, source),
         )
         added += cur.rowcount
     return added
