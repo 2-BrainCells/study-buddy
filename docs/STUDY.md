@@ -78,8 +78,9 @@ known.
 **Before anyone:** a pilot. First the author goes through the full flow, then one friend. Fix what breaks,
 and log the changes at the bottom of this file.
 
-**Spread sessions over 2–3 days.** Notes indexing and the novelty check use the model: the daily budget is
-$1, and the limit is 20 requests/min. The novelty check takes 100–210 s after notes are added.
+**Spread sessions over 2–3 days**, so problems found early can be fixed. Notes indexing and the novelty
+check use the model (DeepInfra: about $0.0007 per learner, $2/month limit). The novelty check takes about
+40–100 s after notes are added.
 
 ### Observed sessions (2–3 people, about 30 min, in person or screen-share)
 
@@ -102,8 +103,8 @@ The same steps, sent as one message: the link, the invite code, the consent text
 > Study Buddy is a student project. If you take part:
 > - The app records which terms it paused on, your "I already know this" clicks, and your quiz answers.
 >   You'll also fill in a short survey.
-> - **If you paste notes, they are sent to AMD's model service to find the terms they cover, and the
->   service keeps prompts for about 2 days.** Paste only study notes, never anything personal.
+> - **If you paste notes, they are sent to DeepInfra, a model-hosting service, to find the terms they
+>   cover. DeepInfra says it doesn't store them.** Paste only study notes, never anything personal.
 > - Use a nickname if you like. Your name is never shown publicly.
 > - Results are reported anonymously and in aggregate. Quotes are used only if you say yes in the survey.
 > - You can stop at any time, and ask for your data to be deleted. Deleting your learner removes your
@@ -146,3 +147,4 @@ change log below, without the name.
 | 25 Oct 2026 | First version | Written before the pilot |
 | 27 Oct 2026 | Hypotheses (section 3) written by Abhinav | Before the pilot and any participant data |
 | 27 Oct 2026 | The quiz page now lists the skipped terms, shows the learner number and links the survey (https://forms.gle/F1DNbTogv5jdKUhS9); Q5 reworded to point there | The skipped list was only on the player page, which participants have left by the time they answer Q5, so false skips would have relied on memory. No participant data existed yet |
+| 28 Oct 2026 | Models moved from AMD Token Factory to DeepInfra (same models); the consent text now names DeepInfra, and section 5's budget and timing are updated | The Token Factory key stopped working after the hackathon (401). The novelty eval on DeepInfra matched the earlier result exactly (DECISIONS #85). No participant data existed yet |

@@ -46,8 +46,16 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
   service holds 5432. Local DATABASE_URL uses localhost:5433; the app
   container uses postgres:5432.
 
-## Models: AMD Token Factory (the hackathon's AMD requirement)
-- All LLM and vision calls go to the Token Factory OpenAI-compatible API.
+## Models: DeepInfra since 28 Oct (AMD Token Factory during the hackathon)
+- All LLM and vision calls go to an OpenAI-compatible API. During the
+  hackathon that was AMD Token Factory (the AMD requirement); its key stopped
+  working after the event (401 on 28 Oct), so since then it's DeepInfra
+  (https://api.deepinfra.com/v1/openai) with the same models: LLM_MODEL
+  XiaomiMiMo/MiMo-V2.6-Flash, NOVELTY_MODEL google/gemma-4-31B-it, VISION_MODEL
+  Qwen/Qwen3-VL-30B-A3B-Instruct (DECISIONS.md #85). Facts below about Token
+  Factory (its limits, JSON-mode check, /v1/usage) are history; the rules
+  (reasoning_effort, Pydantic validation, batching, retries, caching) still
+  apply. The key is still read from RADEON_API_KEY.
   Read RADEON_API_KEY, LLM_BASE_URL, LLM_MODEL and VISION_MODEL from env
   vars; never hard-code them. Check GET /v1/models at startup, because
   model names change.
@@ -62,16 +70,21 @@ Buyer: ed-tech companies. Submission deadline: 18 Oct, 3:30 PM IST.
 - Always send reasoning_effort "none" or "low"; thinking otherwise uses up
   max_tokens and replies come back empty. GLM-5.3-Flash rejects "none"; use
   "low" there.
-- Limits: about 20 requests/min, 8 concurrent, a daily spend cap. Batch
+- DeepInfra: $5 prepaid with a $2/month spending limit (the prepaid balance
+  is the hard stop); its rate limits weren't checked. Gemma takes 42-103 s
+  per novelty call there (9-11 s on Token Factory). GET /v1/usage is Token
+  Factory's, so the usage panel's budget shows "unavailable".
+- Token Factory limits were about 20 requests/min, 8 concurrent, a daily spend cap. Batch
   work (one call per transcript chunk, not per term), retry only 429/502/503
   with exponential backoff and jitter, and cache every result.
 - Log requests and token usage per pipeline stage to the stage_costs table.
 - Token Factory has no embeddings or audio endpoints; those run on CPU.
-- Send only lecture content and study notes; prompts are logged ~2 days.
+- Send only lecture content and study notes. DeepInfra labels these models
+  "Zero retention" (Token Factory logged prompts ~2 days).
 
 ## Rules
 - Never read or edit .env. Never commit anything in data/.
-- Never use the Token Factory key for Claude Code itself.
+- Never use the model API key (RADEON_API_KEY) for Claude Code itself.
 - Lecture videos are CS229 (Andrew Ng, Stanford Engineering Everywhere,
   CC BY-NC-SA 4.0); keep the credit in README.md.
 - Tests never call real models; use fakes.

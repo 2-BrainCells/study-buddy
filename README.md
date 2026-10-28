@@ -36,9 +36,9 @@ Dashboard
   events (pauses, "I know this", quiz answers) + stage_costs + Token Factory budget
 ```
 
-## AMD Token Factory
+## Models
 
-All LLM calls go to AMD Token Factory's OpenAI-compatible API:
+All LLM calls go to an OpenAI-compatible API. During the hackathon that was **AMD Token Factory**; its access ended after the event, so since 28 Oct the same models run on **DeepInfra**. On the novelty eval, DeepInfra gave exactly the same verdicts as Token Factory in 3 of 3 runs ([DECISIONS #85](docs/DECISIONS.md)). The notes below about JSON mode, limits and `/v1/usage` describe Token Factory.
 
 | Stage | Model | Why |
 |---|---|---|
@@ -53,19 +53,19 @@ All LLM calls go to AMD Token Factory's OpenAI-compatible API:
 
 ## Numbers
 
-Measured on the demo clip. Small samples are marked as such; details are in [docs/DECISIONS.md](docs/DECISIONS.md).
+Measured on the demo clip, on Token Factory (12–18 Oct) unless marked. Small samples are marked as such; details are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 | What | Value |
 |---|---|
 | LLM cost per lecture hour (list price) | about **$0.008** |
-| Novelty check per learner per video (Gemma) | about $0.00009, 9 s (average of 4 calls) |
+| Novelty check per learner per video (Gemma) | about $0.00009, 9 s (average of 4 calls). On DeepInfra: 42–103 s (3 calls), about $0.0005 at list price |
 | Whisper small.en on CPU | about 24 s per lecture minute |
 | Pause delay after a term's first mention | median 1.5 s |
 | Novelty check vs hand labels ("known") | precision 0.50, recall 0.64; **n = 21 terms, one learner**. Most disagreements are about what the label means, not model errors ([#74](docs/DECISIONS.md)) |
 
 ## Run it locally
 
-You need Docker Desktop, Python 3.11 (we use a conda env), Node 22, and an AMD Token Factory API key.
+You need Docker Desktop, Python 3.11 (we use a conda env), Node 22, and a key for an OpenAI-compatible model API (we use DeepInfra).
 
 ```bash
 git clone https://github.com/2-BrainCells/study-buddy.git
@@ -121,7 +121,7 @@ python -m ruff check backend
 
 ```
 backend/app/        FastAPI: learner profile, plan, events, dashboard, usage
-backend/pipeline/   transcription, term extraction, embeddings, Token Factory client, CLI
+backend/pipeline/   transcription, term extraction, embeddings, model API client, CLI
 backend/db/         schema (init.sql)
 frontend/src/       React + Vite + Tailwind: setup, player, quiz, dashboard
 design/BRIEF.md     design rules
