@@ -14,13 +14,14 @@ Quiz scores are reported descriptively only. Without a baseline, a right answer 
 ## 2. Metrics
 
 Every metric is computed from data the app already stores (`events`, `learner_terms`) or from the survey,
-so anyone with the data can recompute it. The exact SQL goes in `docs/STUDY_ANALYSIS.sql` (piece 3.5).
+so anyone with the data can recompute it. The exact SQL is in `docs/STUDY_ANALYSIS.sql`.
 
 | Metric | Definition | Source |
 |---|---|---|
 | Pauses | distinct terms with a `pause` event for this learner (study mode). `glance` events are counted separately | `events` |
 | **False-pause rate** | paused terms the learner also marked "I already know this" (`known` event) ÷ pauses | `events` |
-| Skipped terms | video terms already in the learner's profile **before** the session (`learner_terms.source` = `questionnaire` or `notes`, status `known`). Rows with `source = 'video'` come from clicks during the session and are excluded | `learner_terms` |
+| Pointless stops (secondary, descriptive) | stops where **every** paused term was marked "I already know this". One stop can explain several terms (they share a `pause_ts`), so a stop with one known and one new term still helped | `events`, `terms` |
+| Skipped terms | video terms already in the learner's profile **before** the session (`learner_terms.source` = `questionnaire` or `notes`, status `known`). Rows with `source = 'video'` are excluded: they are "I already know this" clicks and the novelty check's cached "not in notes" verdicts | `learner_terms` |
 | **False skips** | skipped terms the learner says they didn't know (survey Q5), plus wrong quiz answers on skipped terms (the quiz only includes skipped terms when the learner has fewer than 5 new ones) | survey + `events` |
 | Saved for the end | new terms beyond the 5-pause cap (shown after the video, not paused) | reconstructed from the plan |
 | Quiz accuracy | correct ÷ answered, descriptive only | `events` |
@@ -148,3 +149,4 @@ change log below, without the name.
 | 27 Oct 2026 | Hypotheses (section 3) written by Abhinav | Before the pilot and any participant data |
 | 27 Oct 2026 | The quiz page now lists the skipped terms, shows the learner number and links the survey (https://forms.gle/F1DNbTogv5jdKUhS9); Q5 reworded to point there | The skipped list was only on the player page, which participants have left by the time they answer Q5, so false skips would have relied on memory. No participant data existed yet |
 | 28 Oct 2026 | Models moved from AMD Token Factory to DeepInfra (same models); the consent text now names DeepInfra, and section 5's budget and timing are updated | The Token Factory key stopped working after the hackathon (401). The novelty eval on DeepInfra matched the earlier result exactly (DECISIONS #85). No participant data existed yet |
+| 29 Oct 2026 | Pilot part 1 (the author) done on the live site; every metric could be computed. Added the secondary metric "pointless stops" (H1 stays per term) and `docs/STUDY_ANALYSIS.sql`; corrected the description of `source = 'video'` rows | The pilot showed that one stop can explain two terms, so a per-term false pause isn't always a pointless interruption, which is what the "fails if" reasoning is about. Written before any participant data; the pilot session is not study data |
