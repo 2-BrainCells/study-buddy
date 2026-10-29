@@ -96,7 +96,8 @@ check use the model (DeepInfra: about $0.0007 per learner, $2/month limit). The 
 
 ### On their own (the rest)
 
-The same steps, sent as one message: the link, the invite code, the consent text, "use Study mode",
+The same steps, sent as one message: the link, the invite code, the consent text, "use one browser on one
+device from sign-up to survey (your learner is saved in that browser only)", "use Study mode",
 "if you add notes, wait about 4 minutes before pressing play", and "the survey link is on the quiz page".
 
 ## 6. Consent (shown before sign-up; observed participants hear it out loud)
@@ -150,3 +151,5 @@ change log below, without the name.
 | 27 Oct 2026 | The quiz page now lists the skipped terms, shows the learner number and links the survey (https://forms.gle/F1DNbTogv5jdKUhS9); Q5 reworded to point there | The skipped list was only on the player page, which participants have left by the time they answer Q5, so false skips would have relied on memory. No participant data existed yet |
 | 28 Oct 2026 | Models moved from AMD Token Factory to DeepInfra (same models); the consent text now names DeepInfra, and section 5's budget and timing are updated | The Token Factory key stopped working after the hackathon (401). The novelty eval on DeepInfra matched the earlier result exactly (DECISIONS #85). No participant data existed yet |
 | 29 Oct 2026 | Pilot part 1 (the author) done on the live site; every metric could be computed. Added the secondary metric "pointless stops" (H1 stays per term) and `docs/STUDY_ANALYSIS.sql`; corrected the description of `source = 'video'` rows | The pilot showed that one stop can explain two terms, so a per-term false pause isn't always a pointless interruption, which is what the "fails if" reasoning is about. Written before any participant data; the pilot session is not study data |
+| 29 Oct 2026 | Pilot learners deleted from Neon (section 9): the author's pilot session, plus 4 extra sign-ups by the author with no activity (0 events, 0 notes) | So none of them are counted as participants by `STUDY_ANALYSIS.sql` |
+| 29 Oct 2026 | Instructions now say to use one browser on one device throughout | The author's extra sign-ups came from using several browsers; a participant doing that would be split across learners |
