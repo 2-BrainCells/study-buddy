@@ -53,12 +53,15 @@ All LLM calls go to an OpenAI-compatible API. During the hackathon that was **AM
 
 ## Numbers
 
-Measured on the demo clip, on Token Factory (12–18 Oct) unless marked. Small samples are marked as such; details are in [docs/DECISIONS.md](docs/DECISIONS.md).
+Measured on the demo clip, on Token Factory (12–18 Oct) unless marked. Small samples are marked as such; details are in [docs/DECISIONS.md](docs/DECISIONS.md). Latency comes from [docs/LATENCY.sql](docs/LATENCY.sql) (model calls, from `stage_costs`) and `backend/bench_api.py` (API routes); p95 is given only where n ≥ 20 ([#86](docs/DECISIONS.md)).
 
 | What | Value |
 |---|---|
 | LLM cost per lecture hour (list price) | about **$0.008** |
-| Novelty check per learner per video (Gemma) | about $0.00009, 9 s (average of 4 calls). On DeepInfra: 42–103 s (3 calls), about $0.0005 at list price |
+| Novelty check per learner per video (Gemma) | about $0.00009, 9 s (average of 4 calls). On DeepInfra: 42–103 s (4 calls), about $0.0005 at list price |
+| Term extraction per ~600-word chunk (MiMo) | p50 65 s, p95 97 s (**n = 20 calls**), including waits for the 20 requests/min limit |
+| API response, live site, warm (30 Oct) | p50 151–239 ms, p95 174–300 ms across 8 read routes (50 requests each, one at a time); the plan route is slowest. Most of it is network: a route with no database takes 151 ms. Locally: p50 4–98 ms |
+| Cold start (free host waking up) | 24 s (**one sample**, 30 Oct) |
 | Whisper small.en on CPU | about 24 s per lecture minute |
 | Pause delay after a term's first mention | median 1.5 s |
 | Novelty check vs hand labels ("known") | precision 0.50, recall 0.64; **n = 21 terms, one learner**. Most disagreements are about what the label means, not model errors ([#74](docs/DECISIONS.md)) |
