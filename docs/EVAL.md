@@ -53,3 +53,5 @@ ORDER BY md5(id::text) gives a random-looking order that's identical every time 
 
 ## Change log
 | Date | Change | Why |
+|---|---|---|
+| 3 Nov 2026 | Label review after the first pass: 140, 145 moved C3 → C4; 141 C3 = 0 and C4 = 0; 146 C4 = 0; terms 71, 72, 79, 81 relabelled from NA or values contradicting their notes; 143's blind answer corrected (entered as position, not index). | Review identified inconsistencies between labels, notes, and rubric criteria. Usable went from 38 to 40 before the additional C3 review of 141. |
