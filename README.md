@@ -5,9 +5,13 @@
 An AI study buddy for lecture videos. It pauses the lecture at the end of a sentence to explain a term **this learner** doesn't know yet, based on their own notes, then quizzes them at the end.
 
 **Live demo:** https://study-buddy-vb9b.onrender.com/
-(Public demo mode: pick learner A or B. The first load after 15 idle minutes takes about a minute while the free host wakes up.)
+(Public demo mode: pick learner A or B. The first load after 15 idle minutes can take up to a minute while the free host wakes up; 24 s when measured on 30 Oct.)
 
 Built solo for the **AMD Developer Hackathon ACT III, Track 4** (12–18 Oct 2026). Buyer: ed-tech companies that host lecture video.
+
+## The problem
+
+Students and professionals learning from recorded lectures often hit a term they don't know, like *contours* in our demo clip. When that happens, they stop to search the web or ask an AI chatbot. That takes time, and with a phone in hand, one search easily turns into scrolling. Neither search nor a chatbot knows what this learner already knows, so the learner has to notice the gap, leave the video and explain their background each time. Study Buddy knows what the learner already knows, from their notes and a short questionnaire, pauses only for the terms that are new to them, and explains each one in the video at the end of the sentence, so there's nothing to search for. In the 16-minute demo clip it finds 21 terms, and a beginner and a learner with notes get different pauses from the same video.
 
 ## What it does
 
@@ -20,20 +24,27 @@ At each pause, a short card explains the term. "I already know this" adds the te
 
 ## How it works
 
-```
-Per video (once, cached, shared by every learner)
-  video ─▶ faster-whisper (CPU, word timestamps)
-        ─▶ LLM per ~600-word chunk: terms + explanations + 2 quiz Qs each
-        ─▶ code places each pause at the end of the sentence that introduces the term
-        ─▶ BGE-M3 (CPU) drops near-duplicate terms (cosine ≥ 0.90)
-        ─▶ Postgres + pgvector
+```mermaid
+flowchart TD
+  subgraph perVideo["Per video: once, cached, shared by every learner"]
+    V["Lecture video"] --> W["faster-whisper on CPU<br/>word timestamps"]
+    W --> T["LLM per ~600-word chunk<br/>terms, explanations, 2 quiz questions each"]
+    T --> P["Code places each pause at the end of<br/>the sentence that introduces the term"]
+    P --> D["BGE-M3 on CPU drops near-duplicate terms<br/>cosine ≥ 0.90"]
+  end
+  D --> DB[("Postgres + pgvector")]
 
-Per learner
-  questionnaire + notes ─▶ profile ─▶ novelty check (profile match, then one LLM call
-  per learner per video: which terms do the notes cover?) ─▶ player pauses on the new ones
+  subgraph perLearner["Per learner"]
+    Q["Questionnaire + notes"] --> PR["Learner profile"]
+    PR --> N["Novelty check: profile match first, then one LLM call<br/>per learner per video: which terms do the notes cover?"]
+    N --> PL["Player pauses on the 5 new terms mentioned most,<br/>the rest are saved for the end"]
+  end
+  DB --> N
+  PL --> E[("events: pauses, I already know this, quiz answers")]
 
-Dashboard
-  events (pauses, "I know this", quiz answers) + stage_costs + Token Factory budget
+  E --> DASH["Ed-tech dashboard and usage panel"]
+  S[("stage_costs: requests, tokens, latency per stage")] --> DASH
+  B["Model budget, Token Factory only"] -.-> DASH
 ```
 
 ## Models
@@ -46,9 +57,9 @@ All LLM calls go to an OpenAI-compatible API. During the hackathon that was **AM
 | Novelty check (do the notes cover this term?) | Gemma-4-31B-IT | Same accuracy as MiMo on our labels, 10–20× faster, about 4× cheaper ([DECISIONS #66](docs/DECISIONS.md)) |
 
 - **Fallbacks:** if Gemma is unavailable, the novelty check falls back to MiMo, then to an offline path. The app always loads from cached data.
-- **Valid output:** Token Factory supports JSON mode but not `json_schema`. So the schema goes in the prompt, every reply is validated with Pydantic, and a reply that breaks the schema is retried once.
+- **Valid output:** Token Factory supports JSON mode but not `json_schema`. So the schema goes in the prompt and every reply is validated with Pydantic. Term extraction retries a reply that breaks the schema once, sending the validation error back; the novelty check instead falls back to the next model.
 - **Rate limits:** only 429, 502 and 503 are retried, with exponential backoff and jitter. Work is batched (one call per transcript chunk, not per term), and every result is cached.
-- **Cost logging:** requests, tokens, retries and latency are logged per pipeline stage. The usage panel turns them into cost per lecture hour and per learner, next to the live daily budget from `GET /v1/usage`.
+- **Cost logging:** requests, tokens, retries and latency are logged per pipeline stage. The usage panel turns them into cost per lecture hour and per learner, next to the live daily budget from `GET /v1/usage` (Token Factory only; on DeepInfra the panel shows it as unavailable).
 - **CPU only:** embeddings (BGE-M3) and speech-to-text (faster-whisper) run on CPU, because Token Factory has no embeddings or audio endpoints.
 
 ## Numbers
@@ -113,7 +124,7 @@ The live demo runs one Docker image on Render (free tier, Singapore), with Neon 
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q   # 65 tests; models are always faked
+cd backend && python -m pytest -q   # 70 tests; models are always faked
 # the 18 database tests need a separate Postgres database (they empty it); without one they're skipped:
 # TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/study_buddy_test, after running backend/db/init.sql on it
 cd frontend && npm test             # 10 tests
@@ -126,17 +137,22 @@ python -m ruff check backend
 backend/app/        FastAPI: learner profile, plan, events, dashboard, usage
 backend/pipeline/   transcription, term extraction, embeddings, model API client, CLI
 backend/db/         schema (init.sql)
+backend/bench_api.py                     API latency, p50 and p95 per route
+backend/eval_export.py, eval_score.py    quiz and term eval: export for labelling, then score
 frontend/src/       React + Vite + Tailwind: setup, player, quiz, dashboard
 design/BRIEF.md     design rules
 docs/PLAN.md        build plan and daily progress
 docs/DECISIONS.md   every error and decision, with cause and resolution
+docs/EVAL.md        eval rubric for quiz questions and terms, written before labelling
+docs/STUDY.md       user study protocol, hypotheses and change log
+docs/LATENCY.sql    model-call latency from stage_costs
 ```
 
 ## Limitations
 
 - One demo clip, and the novelty check is measured on one learner's notes (n = 21). The labelling question ("covered by my notes" vs "I'd want a card") is still open.
 - Handwritten notes (photo → vision model → Markdown) are designed but not built.
-- The free host sleeps when idle, so the first visit takes about a minute.
+- The free host sleeps when idle, so the first visit can take up to a minute.
 
 ## Credits and licence
 
