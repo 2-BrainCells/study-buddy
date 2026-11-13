@@ -136,7 +136,7 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
             )}
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+              <Input id="name" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">I'm comfortable with</legend>
