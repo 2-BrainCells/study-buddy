@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pipeline.llm import Settings, TokenFactory, db_cost_sink
 from pipeline.transcribe import to_vtt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import insights
 from app.learner import (
@@ -50,13 +50,18 @@ def token_factory() -> TokenFactory:
 
 
 class NewLearner(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=60)
     answers: Questionnaire
-    invite: str = ""
+    invite: str = Field("", max_length=200)
 
 
 class Notes(BaseModel):
-    text: str
+    text: str = Field(
+        min_length=1, max_length=20_000
+    )  # ~3,000 words, ~5 notes_terms calls
+
+
+MAX_NOTES_PER_LEARNER = 2
 
 
 class Known(BaseModel):
@@ -119,7 +124,9 @@ def require_learner(learner_id: int, authorization: str | None) -> bool:
     """
     # ponytail: one extra query per request; fold it into the endpoint's own connection if latency matters
     with psycopg.connect(DATABASE_URL) as conn:
-        row = conn.execute("SELECT token_hash FROM learners WHERE id = %s", (learner_id,)).fetchone()
+        row = conn.execute(
+            "SELECT token_hash FROM learners WHERE id = %s", (learner_id,)
+        ).fetchone()
     if row is None:
         raise HTTPException(404, "learner not found")
     if row[0] is None:
@@ -132,11 +139,28 @@ def require_learner(learner_id: int, authorization: str | None) -> bool:
 
 def require_not_demo() -> None:
     if demo_mode():
-        raise HTTPException(403, "Adding learners and notes is turned off in the public demo.")
+        raise HTTPException(
+            403, "Adding learners and notes is turned off in the public demo."
+        )
+
+
+def model_budget_left() -> bool:
+    """Whether the last 24 h of model requests are under MAX_MODEL_REQUESTS_PER_DAY (default 150)."""
+    # ponytail: failed calls aren't in stage_costs (DECISIONS #86), so this counts successes only;
+    # DeepInfra's own spending limit stays the hard stop
+    limit = int(os.environ.get("MAX_MODEL_REQUESTS_PER_DAY", "150"))
+    with psycopg.connect(DATABASE_URL) as conn:
+        used = conn.execute(
+            "SELECT coalesce(sum(requests), 0) FROM stage_costs WHERE created_at > now() - interval '1 day'"
+        ).fetchone()[0]
+    return used < limit
 
 
 def optional_token_factory() -> TokenFactory | None:
-    """The model client, or None when its settings are missing (the app then runs from cached data)."""
+    """The model client, or None when its settings are missing or today's budget is spent
+    (the app then runs from cached data)."""
+    if not model_budget_left():
+        return None
     try:
         return token_factory()
     except KeyError:
@@ -167,6 +191,13 @@ def create_learner(body: NewLearner) -> dict:
     require_invite(body.invite)
     token = secrets.token_urlsafe(32)  # returned once, below; only its hash is stored
     with psycopg.connect(DATABASE_URL) as conn:
+        # caps what a leaked invite code can do; demo learners (no token) don't count
+        # ponytail: two sign-ups at once can both pass the count; fine at study scale
+        real = conn.execute(
+            "SELECT count(*) FROM learners WHERE token_hash IS NOT NULL"
+        ).fetchone()[0]
+        if real >= int(os.environ.get("MAX_LEARNERS", "10")):
+            raise HTTPException(403, "The study is full.")
         learner_id = conn.execute(
             "INSERT INTO learners (name, questionnaire, token_hash) VALUES (%s, %s, %s) RETURNING id",
             (body.name, body.answers.model_dump_json(), hash_token(token)),
@@ -199,24 +230,47 @@ def warm_plans(learner_id: int) -> None:
 
 
 @api.post("/learners/{learner_id}/notes")
-def add_notes(learner_id: int, body: Notes, background: BackgroundTasks, authorization: str | None = Header(None)) -> dict:
+def add_notes(
+    learner_id: int,
+    body: Notes,
+    background: BackgroundTasks,
+    authorization: str | None = Header(None),
+) -> dict:
     """Index typed notes into the learner's profile, then precompute their video plans in the background."""
     if not require_learner(learner_id, authorization):
         require_not_demo()  # demo learners are shared, so the public demo keeps them read-only
+    with psycopg.connect(DATABASE_URL) as conn:
+        added_before = conn.execute(
+            "SELECT count(*) FROM notes WHERE learner_id = %s", (learner_id,)
+        ).fetchone()[0]
+    if added_before >= MAX_NOTES_PER_LEARNER:
+        raise HTTPException(
+            429,
+            f"You've added notes {MAX_NOTES_PER_LEARNER} times; that's the limit for this study.",
+        )
     tf = optional_token_factory()
     if tf is None:
-        raise HTTPException(503, "Reading notes needs the model, which isn't configured.")
+        raise HTTPException(
+            503,
+            "Reading notes needs the model, which isn't available right now; try again tomorrow.",
+        )
     try:
-        with psycopg.connect(DATABASE_URL) as conn:  # rolled back on error, so no half-indexed notes
+        with psycopg.connect(
+            DATABASE_URL
+        ) as conn:  # rolled back on error, so no half-indexed notes
             added = index_notes(conn, tf, learner_id, body.text)
     except openai.APIError as e:
-        raise HTTPException(503, "The model is unavailable right now; try adding notes again later.") from e
+        raise HTTPException(
+            503, "The model is unavailable right now; try adding notes again later."
+        ) from e
     background.add_task(warm_plans, learner_id)
     return {"terms_added": added}
 
 
 @api.get("/learners/{learner_id}/videos/{video_id}/plan")
-def get_plan(learner_id: int, video_id: int, authorization: str | None = Header(None)) -> list[dict]:
+def get_plan(
+    learner_id: int, video_id: int, authorization: str | None = Header(None)
+) -> list[dict]:
     """This learner's pause plan for one video."""
     require_learner(learner_id, authorization)
     with psycopg.connect(DATABASE_URL) as conn:
@@ -224,7 +278,9 @@ def get_plan(learner_id: int, video_id: int, authorization: str | None = Header(
 
 
 @api.post("/learners/{learner_id}/known")
-def mark_known(learner_id: int, body: Known, authorization: str | None = Header(None)) -> dict:
+def mark_known(
+    learner_id: int, body: Known, authorization: str | None = Header(None)
+) -> dict:
     """'I already know this': the term becomes known for this learner, and the click is logged."""
     require_learner(learner_id, authorization)
     with psycopg.connect(DATABASE_URL) as conn:
@@ -245,7 +301,9 @@ def mark_known(learner_id: int, body: Known, authorization: str | None = Header(
 
 @api.post("/events")
 def log_event(e: Event, authorization: str | None = Header(None)) -> dict:
-    require_learner(e.learner_id, authorization)  # events feed the case study, so nobody can fake another's
+    require_learner(
+        e.learner_id, authorization
+    )  # events feed the case study, so nobody can fake another's
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute(
             "INSERT INTO events (learner_id, video_id, type, term_id, correct, ts) VALUES (%s, %s, %s, %s, %s, %s)",

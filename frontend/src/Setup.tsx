@@ -149,8 +149,9 @@ export function Setup({ onStart, error }: { onStart: (l: Learner, v: Video) => v
               ))}
             </fieldset>
             <div className="space-y-2">
-              <Label htmlFor="notes">Your notes (Markdown, optional)</Label>
-              <Textarea id="notes" rows={8} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <Label htmlFor="notes">Your notes (Markdown, optional, up to 20,000 characters)</Label>
+              {/* same limit as Notes.text in backend/app/main.py; the browser stops a longer paste */}
+              <Textarea id="notes" rows={8} maxLength={20_000} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             <Button type="submit" variant="secondary" disabled={busy}>{busy ? "Working…" : "Create learner"}</Button>
             {formMsg && <p role="status" className="text-sm">{formMsg}</p>}

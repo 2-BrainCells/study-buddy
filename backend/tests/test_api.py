@@ -6,6 +6,9 @@ import psycopg
 import pytest
 from app.learner import OFFLINE
 from app.main import app, hash_token
+from app.main import (
+    optional_token_factory as real_optional_token_factory,  # before conftest fakes it
+)
 from fastapi.testclient import TestClient
 
 client = TestClient(app)  # pretends to be a browser; no server needed
@@ -290,3 +293,51 @@ def test_usage_panel_never_shows_a_real_learners_name(db):
         db["learner"]: "Test learner",
         lid: f"Learner {lid}",
     }  # never "Asha"
+
+
+# Caps on what an invited stranger can spend or pollute
+
+
+def test_notes_over_the_size_cap_are_refused_and_not_stored(db):
+    lid, me = real_learner()
+    notes = {"text": "x" * 20_001}
+    response = client.post(f"/api/learners/{lid}/notes", json=notes, headers=me)
+    assert response.status_code == 422
+    assert sql("SELECT count(*) FROM notes") == [(0,)]
+
+
+def test_third_notes_submission_is_refused_before_the_model(db):
+    lid, me = real_learner()
+    for _ in range(2):  # two earlier submissions
+        sql("INSERT INTO notes (learner_id, source, text) VALUES (%s, 'typed', 'n')", (lid,))
+    notes = {"text": "more notes"}
+    response = client.post(f"/api/learners/{lid}/notes", json=notes, headers=me)
+    assert response.status_code == 429  # not 503: refused before any model is asked
+
+
+def test_signup_is_refused_once_the_study_is_full(db, monkeypatch):
+    monkeypatch.setenv("MAX_LEARNERS", "1")
+    real_learner()
+    assert signup().status_code == 403
+    # the fixture's demo learner doesn't count: one demo + one real
+    assert sql("SELECT count(*) FROM learners") == [(2,)]
+
+
+def test_model_is_switched_off_once_the_daily_budget_is_spent(db, monkeypatch):
+    fake_client = object()
+    monkeypatch.setattr("app.main.optional_token_factory", real_optional_token_factory)
+    monkeypatch.setattr("app.main.token_factory", lambda: fake_client)
+    monkeypatch.setenv("MAX_MODEL_REQUESTS_PER_DAY", "5")
+    assert real_optional_token_factory() is fake_client  # nothing spent yet
+
+    sql(
+        "INSERT INTO stage_costs (video_id, stage, model, requests, input_tokens, output_tokens,"
+        " retries_429, latency_ms) VALUES (%s, 'novelty', 'm', 5, 1, 1, 0, 1)",
+        (db["video"],),
+    )
+    assert real_optional_token_factory() is None
+    lid, me = real_learner()
+    notes = {"text": "my notes"}
+    assert client.post(f"/api/learners/{lid}/notes", json=notes, headers=me).status_code == 503
+    plan = client.get(f"/api/learners/{lid}/videos/{db['video']}/plan", headers=me)
+    assert plan.status_code == 200 and len(plan.json()) == 2  # still loads from cached data
