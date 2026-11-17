@@ -102,7 +102,7 @@ check use the model (DeepInfra: about $0.0007 per learner, $2/month limit). The 
 
 The same steps, sent as one message: the link, the invite code, the consent text, "use one browser on one
 device from sign-up to survey (your learner is saved in that browser only)", "use Study mode",
-"if you add notes, wait about 4 minutes before pressing play", and "the survey link is on the quiz page".
+"if you add notes, wait about 4 minutes before pressing play", "you can add notes at most twice", and "the survey link is on the quiz page".
 
 ## 6. Consent (shown before sign-up; observed participants hear it out loud)
 
@@ -159,3 +159,4 @@ change log below, without the name.
 | 29 Oct 2026 | Instructions now say to use one browser on one device throughout | The author's extra sign-ups came from using several browsers; a participant doing that would be split across learners |
 | 17 Nov 2026 | Sections 4 and 8: participants are recruited online (hackathon participants, college ML groups, ML communities, a social post), not from classmates and friends. The incentive is a feedback swap (the author tests the participant's project in return), and the bias notes are updated to match | Friends weren't interested, and strangers who are learning ML are the target users anyway. Before recruiting, the live site got caps on what an invited stranger can do (DECISIONS #87): notes up to 20,000 characters, at most 2 notes submissions per learner, at most 25 real learners, and a separate model key with a $2/month limit. No participant data existed yet |
 | 17 Nov 2026 | Setup-check learner deleted from Neon (section 9): one sign-up by the author, used to check the deployed caps and the new model key | So it isn't counted as a participant by `STUDY_ANALYSIS.sql` |
+| 17 Nov 2026 | Section 5: the "on their own" message now says notes can be added at most twice | The live site refuses a third notes submission (DECISIONS #87); without warning, a participant would hit that limit mid-study. No participant data existed yet |
