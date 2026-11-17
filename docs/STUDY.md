@@ -63,7 +63,10 @@ known.
 
 ## 4. Participants
 
-- **Target:** 6–10 people, recruited from classmates and friends.
+- **Target:** 6–10 people, recruited online: other hackathon participants, college ML club and course
+  groups, ML learning communities (such as r/learnmachinelearning and Kaggle), and a LinkedIn or X post.
+  The invite code goes out by direct message only.
+- **Incentive:** a feedback swap. The author tests the participant's own project in return; no payment.
 - **A deliberate mix of prior knowledge**, because the clip is CS229 gradient descent and people who
   know ML well may get no pauses at all:
   - about a third new to ML
@@ -71,8 +74,9 @@ known.
   - about a third who know it well
 - Recorded per person: the onboarding questionnaire (already in the app), whether they added notes, and
   observed or on their own.
-- **Known bias:** not a random sample, and participants know the author, so ratings will lean positive.
-  Concrete complaints and observed behaviour count for more than scores.
+- **Known bias:** not a random sample. Participants choose to take part, so they probably like trying new
+  learning tools, and a feedback swap may make them kinder. Ratings will lean positive, so concrete
+  complaints and observed behaviour count for more than scores.
 
 ## 5. Protocol
 
@@ -127,7 +131,7 @@ device from sign-up to survey (your learner is saved in that browser only)", "us
 ## 8. Limitations (written in advance)
 
 - One 16-minute clip on one topic; the results may not hold for other lectures.
-- 6–10 participants, not randomly chosen, who know the author: there's no statistical significance, and
+- 6–10 self-selected participants, not randomly chosen, some offered a feedback swap: there's no statistical significance, and
   every number is a description of this group.
 - "I already know this" is a proxy for "didn't need this pause". Some people may click it to dismiss a
   card, and some may not bother to click.
@@ -153,3 +157,5 @@ change log below, without the name.
 | 29 Oct 2026 | Pilot part 1 (the author) done on the live site; every metric could be computed. Added the secondary metric "pointless stops" (H1 stays per term) and `docs/STUDY_ANALYSIS.sql`; corrected the description of `source = 'video'` rows | The pilot showed that one stop can explain two terms, so a per-term false pause isn't always a pointless interruption, which is what the "fails if" reasoning is about. Written before any participant data; the pilot session is not study data |
 | 29 Oct 2026 | Pilot learners deleted from Neon (section 9): the author's pilot session, plus 4 extra sign-ups by the author with no activity (0 events, 0 notes) | So none of them are counted as participants by `STUDY_ANALYSIS.sql` |
 | 29 Oct 2026 | Instructions now say to use one browser on one device throughout | The author's extra sign-ups came from using several browsers; a participant doing that would be split across learners |
+| 17 Nov 2026 | Sections 4 and 8: participants are recruited online (hackathon participants, college ML groups, ML communities, a social post), not from classmates and friends. The incentive is a feedback swap (the author tests the participant's project in return), and the bias notes are updated to match | Friends weren't interested, and strangers who are learning ML are the target users anyway. Before recruiting, the live site got caps on what an invited stranger can do (DECISIONS #87): notes up to 20,000 characters, at most 2 notes submissions per learner, at most 25 real learners, and a separate model key with a $2/month limit. No participant data existed yet |
+| 17 Nov 2026 | Setup-check learner deleted from Neon (section 9): one sign-up by the author, used to check the deployed caps and the new model key | So it isn't counted as a participant by `STUDY_ANALYSIS.sql` |
