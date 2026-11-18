@@ -230,7 +230,8 @@ export function Player({ learner, video, plan, onDone }: {
                       </span>
                       <span className="ml-2">{reasonText(item.reason)}</span>
                     </p>
-                    <Button variant="ghost" size="sm" className="mt-1 -ml-2.5 min-h-11 sm:min-h-7"
+                    {/* outline, not ghost: as plain text it was easy to miss, and the false-pause rate counts these clicks */}
+                    <Button variant="outline" size="sm" className="mt-3 min-h-11 sm:min-h-8"
                             onClick={() => known(item)}>
                       I already know this
                     </Button>
