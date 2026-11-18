@@ -54,12 +54,23 @@ function readMine(): MyLearner[] {
 let mine = readMine()
 export const myLearners = () => mine
 
-function remember(l: MyLearner) {
-  mine = [...mine.filter((m) => m.id !== l.id), l]
+function save(next: MyLearner[]) {
+  mine = next
   try {
     localStorage.setItem(MINE_KEY, JSON.stringify(mine))
   } catch {
     // ponytail: storage blocked (private window): the learner lasts until this tab closes
+  }
+}
+const remember = (l: MyLearner) => save([...mine.filter((m) => m.id !== l.id), l])
+const forget = (id: number) => save(mine.filter((m) => m.id !== id))
+
+/** An HTTP error from the API, with FastAPI's detail as the message. */
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
   }
 }
 
@@ -78,7 +89,7 @@ async function req<T>(path: string, init?: RequestInit, lid?: number): Promise<T
     } catch {
       // not JSON: show the raw text
     }
-    throw new Error(`${detail} (${init?.method ?? "GET"} ${path}: ${r.status})`)
+    throw new ApiError(`${detail} (${init?.method ?? "GET"} ${path}: ${r.status})`, r.status)
   }
   return r.json()
 }
@@ -99,7 +110,19 @@ export const api = {
     if (me) remember({ ...me, note_terms: me.note_terms + r.terms_added })
     return r
   },
-  plan: (lid: number, vid: number) => req<PlanItem[]>(`/learners/${lid}/videos/${vid}/plan`, undefined, lid),
+  async plan(lid: number, vid: number) {
+    try {
+      return await req<PlanItem[]>(`/learners/${lid}/videos/${vid}/plan`, undefined, lid)
+    } catch (e) {
+      // the plan route's only 404 is "learner not found": deleted on the server (a deletion request),
+      // so stop listing it here instead of showing a raw error every time it's picked
+      if (e instanceof ApiError && e.status === 404 && mine.some((m) => m.id === lid)) {
+        forget(lid)
+        throw new Error("This learner was deleted, so it has been removed from this browser.")
+      }
+      throw e
+    }
+  },
   quiz: (vid: number) => req<Question[]>(`/videos/${vid}/quiz`),
   known: (lid: number, video_id: number, term_id: number, ts: number) =>
     post(`/learners/${lid}/known`, { video_id, term_id, ts }, lid),

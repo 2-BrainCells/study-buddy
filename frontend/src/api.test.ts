@@ -22,6 +22,15 @@ it("remembers a new learner's token and sends it only for that learner", async (
   expect(sent[1].Authorization).toBeUndefined()
 })
 
+it("forgets a learner the server says no longer exists", async () => {
+  stubFetch({ learner_id: 9, seeded_terms: 0, token: "secret-9" })
+  await api.createLearner("Gone", {}, "letmein")
+
+  stubFetch({ detail: "learner not found" }, 404)
+  await expect(api.plan(9, 1)).rejects.toThrow("removed from this browser")
+  expect(myLearners().map((l) => l.id)).not.toContain(9)
+})
+
 it("shows FastAPI's error detail, not raw JSON", async () => {
   stubFetch({ detail: "That invite code isn't right." }, 403)
   await expect(api.createLearner("x", {}, "nope")).rejects.toThrow("That invite code isn't right. (POST /learners: 403)")
